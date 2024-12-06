@@ -8,9 +8,25 @@ Any endpoints that exist within boom-api must have an entry into this page.
 
 # Query Boom
 
+## count documents
+**Endpoint**: `POST "/query"`\
+**Returns**: Resulting number of documents after running filter on catalog\
+**catalog**: String\
+**filter**: MQL filter\
+**Body**
+```
+{
+  "query_type": "count_documents",
+  "query": {
+    "catalog": <catalog_name>,
+    "filter": { <filter> }
+  }
+}
+```
+
 ## Cone Search
 **Endpoint**: `POST "/query"`\
-**Returns**: HashMap containing object names and resulting documents from it's cone search
+**Returns**: HashMap of object names and corresponding cone search results
 
 **Body**:
 ```
@@ -72,11 +88,35 @@ Any endpoints that exist within boom-api must have an entry into this page.
 }
 ```
 
-## Info (W.I.P)
-**Endpoint**: `GET "/query/info"`\
-**Command**: `string`\
+## Find 
+**Endpoint**: `POST "/query`\
+**Body**:
+```
+{
+  "query_type": "find",
+  "query": {
+    "catalog": "ZTF_alerts",
+    "filter": {
+      "candidate.drb": {
+        "$gt": 0.9
+      }
+    },
+    "projection": {
+      "_id": 0,
+      "candid": 1,
+      "candidate.drb": 1
+    }
+  },
+  "kwargs": {
+    "limit": 2
+  }
+}
+```
+
+## Info
+**Endpoint**: `POST "/query"`\
 **Enum**: `"catalog_info"`, 
-`"index_info"`, `"db_info"`
+`"index_info"`, `"db_info"`, `"index_info"`
 
 **Body**:
 ```
@@ -86,3 +126,4 @@ Any endpoints that exist within boom-api must have an entry into this page.
     }
 }
 ```
+

@@ -5,7 +5,7 @@ use futures::TryStreamExt;
 
 const DB_NAME: &str = "boom";
 
-const SUPPORTED_QUERY_TYPES: [&str; 4] = ["find", "cone_search", "sample", "info"];
+const SUPPORTED_QUERY_TYPES: [&str; 5] = ["find", "cone_search", "sample", "info", "count_documents"];
 const SUPPORTED_INFO_COMMANDS: [&str; 4] = ["catalog_names", "catalog_info", "index_info", "db_info"];
 
 #[derive(serde::Deserialize, Clone)]
@@ -106,6 +106,13 @@ impl Default for QueryKwargs {
     }
 }
 
+impl fmt::Debug for QueryKwargs {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, 
+            "{:?},\n{:?},\n{:?},\n{:?}\n", self.limit, self.skip, self.sort, self.max_time_ms)
+    }
+}
+
 #[derive(serde::Deserialize)]
 struct QueryBody {
     query_type: String,
@@ -191,26 +198,12 @@ async fn build_cone_search_filter(
 pub async fn query(client: web::Data<Client>, body: web::Json<QueryBody>) -> HttpResponse {
     let query_type = body.query_type.as_str();
     let query = body.query.clone().unwrap_or(Query{..Default::default()});
-    // let query = body.query.clone().unwrap_or(Query {
-    //     object_coordinates: None,
-    //     command: None,
-    //     catalog: None,
-    //     filter: None,
-    //     projection: None,
-    //     size: None,
-    // });
     let kwargs = body.kwargs.clone().unwrap_or( QueryKwargs { ..Default::default()});
-    // let kwargs = body.kwargs.clone().unwrap_or(QueryKwargs {
-    //     limit: None,
-    //     skip: None,
-    //     sort: None,
-    //     max_time_ms: None,
-    // });
     
     if !SUPPORTED_QUERY_TYPES.contains(&query_type) {
         return HttpResponse::BadRequest().body(format!("Unknown query type {query_type}"));
     }
-
+    
     if query_type == "info" {
         let command = query.command.clone().expect("command is required for info queries");
         if !SUPPORTED_INFO_COMMANDS.contains(&command.as_str()) {
@@ -263,6 +256,15 @@ pub async fn query(client: web::Data<Client>, body: web::Json<QueryBody>) -> Htt
         let docs = 
             cursor.try_collect::<Vec<mongodb::bson::Document>>().await.unwrap();
         HttpResponse::Ok().json(docs)
+    } else if query_type == "count_documents" {
+        let filter = query.filter.unwrap_or(doc!{});
+        let doc_count = collection.count_documents(filter).await;
+        match doc_count {
+            Err(e) => {
+                HttpResponse::BadRequest().body(format!("bad request, got error {:?}", e))
+            },
+            Ok(x) => HttpResponse::Ok().json(x)
+        }
     } else if query_type == "find" {
         let filter = query.filter.expect("filter is required for find");
         let projection = query.projection;
