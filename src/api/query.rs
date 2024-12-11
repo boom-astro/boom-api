@@ -4,12 +4,13 @@ use mongodb::{bson::doc, Client, Collection};
 use futures::TryStreamExt;
 
 use crate::models::model::*;
-use crate::models;
 
 const DB_NAME: &str = "boom";
 
 const SUPPORTED_QUERY_TYPES: [&str; 5] = ["find", "cone_search", "sample", "info", "count_documents"];
 const SUPPORTED_INFO_COMMANDS: [&str; 4] = ["catalog_names", "catalog_info", "index_info", "db_info"];
+
+// TODO: Test endpoints
 
 async fn build_options(
     projection: Option<mongodb::bson::Document>, 
@@ -163,6 +164,8 @@ pub async fn find(client: web::Data<Client>, body: web::Json<QueryBody>) -> Http
 
 /*
 OLD:
+
+-- uses QueryBody, Query etc structs
 {
   "query_type": "cone_search",
   "query": {
@@ -192,16 +195,8 @@ OLD:
   }
 }
 
-NEW:
 
-pub struct ConeSearchBody {
-    pub radius: Option<f64>,
-    pub unit: Option<Unit>,
-    pub object_coordinates: Option<HashMap<String, [f64, 2]>>,
-    pub catalogs: Option<HashMap<String, [Vec<bson::Document>, 2]>>,
-    pub kwargs: Option<Kwargs>,
-}
-
+-- uses ConeSearchBody struct
 {
     
     "radius": 2,
@@ -218,26 +213,18 @@ pub struct ConeSearchBody {
             ]}
         ]
     },
+    -- single catalog (current)
+    "catalog": {
+        "catalog_name": "<name>",
+        "filter": {},
+        "projection": {},
+    }
+    -- double catalog
     "catalogs": [
         {
-            "ZTF_alerts": {
-                "filter": {},
-                "projection": {
-                    "_id": 0,
-                    "candid": 1,
-                    "objectId": 1
-                }
-            }
-        },
-        {
-            "some_other_catalog": {
-                "filter": {},
-                "projection": {
-                    "_id": 0,
-                    "candid": 1,
-                    "objectId": 1
-                }
-            }
+            "catalog_name": "<name>"
+            "filter": {}
+            "projection:" {}
         }
     ],
     "kwargs": {
@@ -246,43 +233,42 @@ pub struct ConeSearchBody {
 }
 */
 
+
 #[get("/query/cone_search")]
-pub async fn cone_search(client: web::Data<Client>, body: web::Json<QueryBody>) -> HttpResponse {
-    let this_query = body.query.clone().unwrap_or_default();
-    let query_filter = this_query.filter
-        .expect("filter is required for cone_search");
+pub async fn cone_search(client: web::Data<Client>, body: web::Json<ConeSearchBody>) -> HttpResponse {
+    let radius = body.radius.expect("Radius required for cone search");
+    let unit = body.unit.clone().expect("Unit required for cone search");
+    let object_coordinates = body.clone().object_coordinates
+        .expect("Object coordinates required for cone_search");
+    let catalog = body.catalog.clone()
+        .expect("Catalog(s) required for cone_search");
+    let catalog_name = catalog.catalog_name
+        .expect("catalog_name required for a catalog");
+    let input_filter = catalog.filter.unwrap_or(doc! {});
+    let projection = catalog.projection;
+    let collection: Collection<mongodb::bson::Document> = 
+        client.database(DB_NAME).collection(&catalog_name);
+
     let kwargs = body.kwargs.clone().unwrap_or_default();
-    let catalog = this_query.catalog.expect("catalog required for cone_search");
-    let projection = this_query.projection;
-    let object_coordinates = this_query.object_coordinates
-        .expect("object_coordinates is required for cone_serarch");
-    let collection: Collection<mongodb::bson::Document> = client.database(DB_NAME).collection(&catalog);
-    // Batch cone_search calls
-    let mut docs: HashMap<String, Vec<mongodb::bson::Document>> = HashMap::new();
-    let radius = object_coordinates.radius.expect("Radius required for cone_search");
-    let unit = object_coordinates.unit.expect("Unit required for cone_search");
     let find_options = build_options(projection, kwargs).await;
-    // loop through all coordinates in query
-    for coord in object_coordinates.radec {
-        // extract coordinates and name for map
-        for key in coord.keys() {
-            let radec = (coord[key][0], coord[key][1]);
-            let filter = build_cone_search_filter(
-                query_filter.clone(), 
-                radec, 
-                radius, 
-                unit.clone()
-            ).await;
-            // perform cone_search on database
-            let cursor = collection
-                .find(filter)
-                .with_options(find_options.clone()).await.unwrap();
-            // create map entry for this object's cone search 
-            docs.insert(
-                key.to_string(), 
-                cursor.try_collect::<Vec<mongodb::bson::Document>>().await.unwrap()
-            );
-        }
+    
+    let mut docs: HashMap<String, Vec<mongodb::bson::Document>> = HashMap::new();
+    for (object_name, radec) in object_coordinates {
+        let filter = build_cone_search_filter(
+            input_filter.clone(),
+            (radec[0], radec[1]),
+            radius,
+            unit.clone()
+        ).await;
+        // perform cone_search on database
+        let cursor = collection
+            .find(filter)
+            .with_options(find_options.clone()).await.unwrap();
+        // create map entry for this object's cone search
+        docs.insert(
+            object_name,
+            cursor.try_collect::<Vec<mongodb::bson::Document>>().await.unwrap()
+        );
     }
     HttpResponse::Ok().json(docs)
 }

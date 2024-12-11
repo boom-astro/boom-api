@@ -36,13 +36,23 @@ impl fmt::Debug for Unit {
     }
 }
 
+// TODO: update to multi-catalog (?)
+#[derive(serde::Deserialize, Clone)]
 pub struct ConeSearchBody {
     pub radius: Option<f64>,
     pub unit: Option<Unit>,
     pub object_coordinates: Option<HashMap<String, [f64; 2]>>,
-    pub catalogs: Option<HashMap<String, [Vec<bson::Document>; 2]>>,
+    pub catalog: Option<CatalogDetails>,
     pub kwargs: Option<QueryKwargs>,
 }
+
+#[derive(serde::Deserialize, Clone)]
+pub struct CatalogDetails {
+    pub catalog_name: Option<String>,
+    pub filter: Option<mongodb::bson::Document>,
+    pub projection: Option<mongodb::bson::Document>,
+}
+
 
 // TODO: CHANGE THIS AWEFUL THING BELOW
 #[derive(serde::Deserialize, Clone)]
