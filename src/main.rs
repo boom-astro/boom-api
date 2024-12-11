@@ -14,7 +14,8 @@ endpoints:
     To submit a query, post to "/api/queries/" with the corresponding JSON payload.
     
 */
-
+mod api;
+mod models;
 
 use actix_web::{web, App, HttpServer};
 use mongodb::Client;

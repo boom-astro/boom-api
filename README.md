@@ -3,6 +3,26 @@ development environment requirements:
 1. active boom mongodb instance
 2. postman for query testing
 
+# Api Documentation (new)
+
+# Query Boom
+
+## Info
+### Get info from boom
+**Endpoint**: `Get "/query/info"`\
+**command_types**: "db_info", "index_info", "catalog_info", "catalog_names"\
+**Body**: 
+```
+{
+    "command": <command_type>,
+    "catalogs": [catalog_names]
+}
+```
+takes a list of catalogs and a command type and runs that command on each of the provided catalogs\
+returning a list of results.
+
+
+
 # Api Documentation
 Any endpoints that exist within boom-api must have an entry into this page.
 
