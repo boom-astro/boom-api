@@ -34,7 +34,7 @@ impl fmt::Debug for Unit {
     }
 }
 
-// TODO: update to multi-catalog (?)
+// TODO: update to multi-catalog (later)
 #[derive(serde::Deserialize, Clone)]
 pub struct ConeSearchBody {
     pub radius: Option<f64>,
@@ -68,7 +68,6 @@ pub struct CatalogDetails {
 #[derive(serde::Deserialize, Clone)]
 pub struct Query {
     pub object_coordinates: Option<HashMap<String, [f64; 2]>>,
-    // pub command: Option<String>,
     pub catalog: Option<String>,
     pub filter: Option<mongodb::bson::Document>,
     pub projection: Option<mongodb::bson::Document>,
@@ -79,7 +78,6 @@ impl Default for Query {
     fn default() -> Query {
         Query {
             object_coordinates: None,
-            // command: None,
             catalog: None,
             filter: None,
             projection: None,
@@ -93,7 +91,6 @@ impl fmt::Debug for Query {
         write!(f, 
             "{:?},\n{:?},\n{:?},\n{:?},\n{:?}", 
             self.object_coordinates, 
-            // self.command, 
             self.catalog,
             self.filter,
             self.projection,
@@ -129,7 +126,6 @@ impl fmt::Debug for QueryKwargs {
 
 #[derive(serde::Deserialize)]
 pub struct QueryBody {
-    // pub query_type: String,
     pub query: Option<Query>,
     pub kwargs: Option<QueryKwargs>,
 }
