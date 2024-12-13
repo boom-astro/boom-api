@@ -8,7 +8,6 @@ development environment requirements:
 # Query Boom
 
 ## Info
-### Get info from boom
 **Endpoint**: `Get "/query/info"`\
 **command_types**: "db_info", "index_info", "catalog_info", "catalog_names"\
 **Body**: 
@@ -18,10 +17,86 @@ development environment requirements:
     "catalogs": [catalog_names]
 }
 ```
-takes a list of catalogs and a command type and runs that command on each of the provided catalogs\
-returning a list of results.
 
+## Cone Search
+**Endpoint**: `Get "/query/cone_search"`\
+**Unit**: "Arcseconds", "Arcminutes", "Degrees", "Radians"\
+**Body**:
+```
+{
+    "radius": <float>,
+    "unit": <Unit>,
+    "object_coordinates": {
+        <object_name>: [
+            <ra>, <dec>
+        ],
+        <object2_name>: [
+            <ra>, <dec>
+        ]
+    },
+    "catalog": {
+        "catalog_name": <catalog_name>,
+        "filter": <bson>,
+        "projection": <bson>
+    },
+    "kwargs": {<kwargs>}
+}
+```
 
+**Example Body** (should return at least an object called `NGC 5162`):
+```
+{
+    "radius": 1,
+    "unit": "Arcseconds",
+    "object_coordinates": {
+        "object1": [
+            202.366276, 11.006276
+        ]
+    },
+    "catalog": {
+        "catalog_name": "NED",
+        "filter": {},
+        "projection": {}
+    },
+}
+```
+
+## Count Documents
+**Endpoint**: `GET "/query/count_documents"`\
+**Body:**
+```
+{
+    "query": {
+        "catalogs": [<catalog_names>],
+        "filter": {},
+        "projection": {},
+
+    }
+}
+```
+
+## Sample
+**Endpoint**: `GET "/query/sample"`\
+**Body:**
+```
+{
+    "query": {
+        "catatlog": <catalog_name>,
+        "size": <int>
+    }
+}
+```
+
+## Find
+**Endpoint**: `GET "/query/sample"`\
+**Body:**
+```
+{
+    "query": {
+        
+    }
+}
+```
 
 # Api Documentation
 Any endpoints that exist within boom-api must have an entry into this page.
