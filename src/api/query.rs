@@ -10,8 +10,6 @@ const DB_NAME: &str = "boom";
 const SUPPORTED_QUERY_TYPES: [&str; 5] = ["find", "cone_search", "sample", "info", "count_documents"];
 const SUPPORTED_INFO_COMMANDS: [&str; 4] = ["catalog_names", "catalog_info", "index_info", "db_info"];
 
-// TODO: Test endpoints
-
 async fn build_options(
     projection: Option<mongodb::bson::Document>, 
     kwargs: QueryKwargs
