@@ -18,6 +18,16 @@ development environment requirements:
 }
 ```
 
+## Get Object
+**Endpoint**: `Get "/query/get_object"`\
+**Body**:
+```
+{
+    "catalog": <catalog_name>,
+    "object_id": <objectId>
+}
+```
+
 ## Cone Search
 **Endpoint**: `Get "/query/cone_search"`\
 **Unit**: "Arcseconds", "Arcminutes", "Degrees", "Radians"\
@@ -98,7 +108,8 @@ development environment requirements:
 }
 ```
 
-# Api Documentation
+
+# Api Documentation (OLD)
 Any endpoints that exist within boom-api must have an entry into this page.
 
 # Query Boom
