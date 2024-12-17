@@ -19,7 +19,7 @@ development environment requirements:
 ```
 
 ## Get Object
-**Endpoint**: `Get "/query/get_object"`\
+**Endpoint**: `Get "/alerts/get_object"`\
 **Body**:
 ```
 {

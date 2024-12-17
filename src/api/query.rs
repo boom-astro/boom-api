@@ -3,7 +3,7 @@ use actix_web::{post, get, web, HttpResponse};
 use mongodb::{bson::doc, Client, Collection};
 use futures::TryStreamExt;
 
-use crate::models::model::*;
+use crate::models::querying::*;
 
 const DB_NAME: &str = "boom";
 
@@ -160,7 +160,7 @@ pub async fn find(client: web::Data<Client>, body: web::Json<QueryBody>) -> Http
     HttpResponse::Ok().json(docs)
 }
 
-#[get("/query/get_object")]
+#[get("/alerts/get_object")]
 pub async fn get_object(client: web::Data<Client>, body: web::Json<GetObjectBody>) -> HttpResponse {
     let body = body.clone();
     let catalog = body.catalog.expect("catalog required for get_object");
