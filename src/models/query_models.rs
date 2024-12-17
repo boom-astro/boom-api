@@ -51,12 +51,6 @@ pub struct CatalogDetails {
     pub projection: Option<mongodb::bson::Document>,
 }
 
-#[derive(serde::Deserialize, Clone)]
-pub struct GetObjectBody {
-    pub object_id: Option<String>,
-    pub catalog: Option<String>,
-}
-
 // new object coordinates struct
 // #[derive(serde::Deserialize, Clone)]
 // pub struct ObjectCoordinates {

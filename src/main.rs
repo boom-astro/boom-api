@@ -37,7 +37,8 @@ async fn main() -> std::io::Result<()> {
             .service(api::query::cone_search)
             .service(api::query::count_documents)
             .service(api::query::find)
-            .service(api::query::get_object)
+            .service(api::alerts::get_object)
+            .service(api::filter::post_filter)
     })
     .bind(("0.0.0.0", 4000))?
     .run()
