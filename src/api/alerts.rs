@@ -10,9 +10,8 @@ const DB_NAME: &str = "boom";
 pub async fn get_object(client: web::Data<Client>, body: web::Json<alert_models::GetObjectBody>) -> HttpResponse {
     let body = body.clone();
     let catalog = body.catalog.expect("catalog required for get_object");
-    let collection_name = format!("{}_alerts", catalog);
     let collection: Collection<mongodb::bson::Document> = 
-        client.database(DB_NAME).collection(&collection_name);
+        client.database(DB_NAME).collection(&format!("{}_alerts", catalog));
     let object_id = body.object_id.expect("objectId required for get_object");
 
     // get brightest alert

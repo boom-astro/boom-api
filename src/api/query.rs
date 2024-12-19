@@ -83,11 +83,14 @@ pub async fn get_info(client: web::Data<Client>, body: web::Json<InfoQueryBody>)
         return HttpResponse::Ok().json(data);
     } else if command == "catalog_info" {
         // get collection statistics for catalog(s)
-        let catalogs = body.catalogs.clone().expect("catalog(s) is required for catalog info");
+        let catalogs = 
+            body.catalogs.clone().expect("catalog(s) is required for catalog info");
         let mut data = Vec::new();
         for catalog in catalogs {
-            let collection_name = format!("{}_alerts", catalog);
-            data.push(client.database(DB_NAME).run_command(doc! { "collstats": collection_name}).await.unwrap());
+            data.push(
+                client
+                    .database(DB_NAME)
+                    .run_command(doc! { "collstats": format!("{}_alerts", catalog)}).await.unwrap());
         }
         return HttpResponse::Ok().json(data);
     } else if command == "index_info" {
@@ -95,9 +98,8 @@ pub async fn get_info(client: web::Data<Client>, body: web::Json<InfoQueryBody>)
         let mut out_data = Vec::new();
         let catalogs = body.catalogs.clone().expect("catalog(s) is required for index_info");
         for i in 0..catalogs.len() {
-            let collection_name = format!("{}_alerts", &catalogs[i]);
             let collection: Collection<mongodb::bson::Document> = 
-                client.database(DB_NAME).collection(&collection_name);
+                client.database(DB_NAME).collection(&format!("{}_alerts", &catalogs[i]));
             let cursor = collection.list_indexes().await.unwrap();
             let data = cursor.try_collect::<Vec<mongodb::IndexModel>>().await.unwrap();
             out_data.push(data);
@@ -115,8 +117,8 @@ pub async fn get_info(client: web::Data<Client>, body: web::Json<InfoQueryBody>)
 pub async fn sample(client: web::Data<Client>, body: web::Json<QueryBody>) -> HttpResponse {
     let this_query = body.query.clone().unwrap_or_default();
     let catalog = this_query.catalog.unwrap();
-    let collection_name = format!("{catalog}_alerts");
-    let collection: Collection<mongodb::bson::Document> = client.database(DB_NAME).collection(&collection_name);
+    let collection: Collection<mongodb::bson::Document> = 
+        client.database(DB_NAME).collection(&format!("{}_alerts", catalog));
 
     let size = this_query.size.unwrap_or(1);
     if size > 1000 {
@@ -139,8 +141,8 @@ pub async fn sample(client: web::Data<Client>, body: web::Json<QueryBody>) -> Ht
 pub async fn count_documents(client: web::Data<Client>, body: web::Json<QueryBody>) -> HttpResponse {
     let this_query = body.query.clone().unwrap_or_default();
     let catalog = this_query.catalog.unwrap();
-    let collection_name = format!("{catalog}_alerts");
-    let collection: Collection<mongodb::bson::Document> = client.database(DB_NAME).collection(&collection_name);
+    let collection: Collection<mongodb::bson::Document> = 
+        client.database(DB_NAME).collection(&format!("{}_alerts", catalog));
     let filter = this_query.filter.unwrap_or(doc!{});
     let doc_count = collection.count_documents(filter).await;
     match doc_count {
@@ -156,11 +158,11 @@ pub async fn find(client: web::Data<Client>, body: web::Json<QueryBody>) -> Http
     let this_query = body.query.clone().unwrap_or_default();
     let filter = this_query.filter.expect("filter is required for find");
     let catalog = this_query.catalog.expect("catalog is required for find");
-    let collection_name = format!("{catalog}_alerts");
     let find_options = build_options(
         this_query.projection, body.kwargs.clone().unwrap_or_default()
     ).await;
-    let collection: Collection<mongodb::bson::Document> = client.database(DB_NAME).collection(&collection_name);
+    let collection: Collection<mongodb::bson::Document> = 
+        client.database(DB_NAME).collection(&format!("{}_alerts", catalog));
     let cursor = collection.find(filter).with_options(find_options).await.unwrap();
     let docs = cursor.try_collect::<Vec<mongodb::bson::Document>>().await.unwrap();
     HttpResponse::Ok().json(docs)
@@ -174,13 +176,13 @@ pub async fn cone_search(client: web::Data<Client>, body: web::Json<ConeSearchBo
         .clone().object_coordinates
         .expect("Object coordinates required for cone_search");
 
-    let catalog = body.catalog.clone().expect("Catalog(s) required for cone_search");
-    let catalog_name = catalog.catalog_name.expect("catalog_name required for a catalog");
-    let collection_name = format!("{catalog_name}_alerts");
-    let collection: Collection<mongodb::bson::Document> = client.database(DB_NAME).collection(&collection_name);
+    let catalog_details = body.catalog.clone().expect("Catalog(s) required for cone_search");
+    let catalog_name = catalog_details.catalog_name.expect("catalog_name required for a catalog");
+    let collection: Collection<mongodb::bson::Document> = 
+        client.database(DB_NAME).collection(&format!("{}_alerts", catalog_name));
 
-    let projection = catalog.projection;
-    let input_filter = catalog.filter.unwrap_or(doc! {});
+    let projection = catalog_details.projection;
+    let input_filter = catalog_details.filter.unwrap_or(doc! {});
 
     let kwargs = body.kwargs.clone().unwrap_or_default();
     let find_options = build_options(projection, kwargs).await;
