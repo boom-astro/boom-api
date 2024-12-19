@@ -1,10 +1,6 @@
 use mongodb::{bson::{doc, Document}, Client, Collection};
 use actix_web::{post, web, HttpResponse};
-use std::{borrow::Borrow, error::Error};
-use crate::api::query;
 use crate::models::filter_models::*;
-
-
 
 const DB_NAME: &str = "boom";
 
@@ -23,11 +19,6 @@ fn build_test_filter(
     mut filter_pipeline: Vec<Document>
 ) -> Filter {
     let mut out_filter = vec![
-        doc! {
-            "$match": doc! {
-                // during filter::run proper candis are inserted here
-            }
-        },
         doc! {
             "$project": doc! {
                 "cutoutScience": 0,
@@ -104,7 +95,11 @@ fn build_test_filter(
 }
 
 // tests the functionality of a filter by running it on alerts in database
-async fn test_filter(client: web::Data<Client>, catalog: String, filter: Filter) -> Result<(), mongodb::error::Error> {
+async fn test_filter(
+    client: web::Data<Client>, 
+    catalog: String, 
+    filter: Filter
+) -> Result<(), mongodb::error::Error> {
     let collection: Collection<mongodb::bson::Document> = 
         client.database(DB_NAME).collection(format!("{}_alerts", catalog).as_str());
     
@@ -120,7 +115,9 @@ async fn test_filter(client: web::Data<Client>, catalog: String, filter: Filter)
 }
 
 // takes tested filter and builds the properly formatted bson document for the database
-fn build_filter_bson(filter: Filter) -> Result<mongodb::bson::Document, mongodb::error::Error> {
+fn build_filter_bson(
+    filter: Filter
+) -> Result<mongodb::bson::Document, mongodb::error::Error> {
     // generate new object id
     let id = mongodb::bson::oid::ObjectId::new();
     let date_time = mongodb::bson::DateTime::now();
@@ -149,11 +146,15 @@ fn build_filter_bson(filter: Filter) -> Result<mongodb::bson::Document, mongodb:
     Ok(database_filter_bson)
 }
 
-// TODO: (the filter id creation process will be done by the programmer on the front end)
-//          idea: use authentication to help attribute the filter being added to the user adding it
-//                allows user to submit a filter to the database
+// TODO: (filter id creation process)
+//      idea: the filter id creation process will be done by the programmer on the front end(?)
+//      idea: use authentication to help attribute the filter being added to the user adding it
+//            allows user to submit a filter to the database
 #[post("/filter")]
-pub async fn post_filter(client: web::Data<Client>, body: web::Json<FilterSubmissionBody>) -> HttpResponse {
+pub async fn post_filter(
+    client: web::Data<Client>, 
+    body: web::Json<FilterSubmissionBody>
+) -> HttpResponse {
     let body = body.clone();
     // 1. grab user filter
     let catalog = body.catalog.expect("catalog required");
@@ -164,7 +165,8 @@ pub async fn post_filter(client: web::Data<Client>, body: web::Json<FilterSubmis
     // Test filter
     
     // 1. create production version of filter
-    let filter = build_test_filter(catalog.clone(), id, permissions.clone(), pipeline.clone());
+    let filter = build_test_filter(
+        catalog.clone(), id, permissions.clone(), pipeline.clone());
     
     // 2. perform test run to ensure no errors
     match test_filter(client.clone(), catalog.clone(), filter).await {
@@ -176,7 +178,8 @@ pub async fn post_filter(client: web::Data<Client>, body: web::Json<FilterSubmis
     }
 
     // save original filter to database
-    let filter_collection: Collection<mongodb::bson::Document> = client.database(DB_NAME).collection("filters");
+    let filter_collection: Collection<mongodb::bson::Document> = 
+        client.database(DB_NAME).collection("filters");
     let database_filter = Filter {
         pipeline: pipeline,
         permissions: permissions,
@@ -192,7 +195,14 @@ pub async fn post_filter(client: web::Data<Client>, body: web::Json<FilterSubmis
             return HttpResponse::BadRequest().body("unable to create filter bson");
         }
     };
-    let res = filter_collection.insert_one(filter_bson).await;
-
-    HttpResponse::Ok().body("successfully submitted filter to database")
+    match filter_collection.insert_one(filter_bson).await {
+        Ok(_) => {
+            return HttpResponse::Ok().body("successfully submitted filter to database");
+        },
+        Err(e) => {
+            return HttpResponse::BadRequest().body(
+                format!("failed to insert filter into database. error: {}", e)
+            );
+        }
+    }
 }
