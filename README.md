@@ -180,7 +180,7 @@ Any endpoints that exist within boom-api must have an entry into this page.
                 ]}
             ]
         },
-        "catalog": "ZTF_alerts",
+        "catalog": "ZTF",
         "filter": {},
         "projection": {
             "_id": 0,
@@ -201,7 +201,7 @@ Any endpoints that exist within boom-api must have an entry into this page.
 {
   "query_type": "find",
   "query": {
-    "catalog": "ZTF_alerts",
+    "catalog": "ZTF",
     "filter": {
       "candidate.drb": {
         "$gt": 0.9
