@@ -6,6 +6,7 @@ use crate::models::alert_models;
 
 const DB_NAME: &str = "boom";
 
+// Get an object from a particular catalog by using its objectid
 #[get("/alerts/get_object")]
 pub async fn get_object(client: web::Data<Client>, body: web::Json<alert_models::GetObjectBody>) -> HttpResponse {
     let body = body.clone();
