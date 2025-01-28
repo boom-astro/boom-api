@@ -10,7 +10,7 @@ const DB_NAME: &str = "boom";
 const SUPPORTED_QUERY_TYPES: [&str; 5] = ["find", "cone_search", "sample", "info", "count_documents"];
 const SUPPORTED_INFO_COMMANDS: [&str; 4] = ["catalog_names", "catalog_info", "index_info", "db_info"];
 
-async fn build_options(
+pub async fn build_options(
     projection: Option<mongodb::bson::Document>, 
     kwargs: QueryKwargs
 ) -> mongodb::options::FindOptions {
@@ -128,6 +128,7 @@ pub async fn sample(client: web::Data<Client>, body: web::Json<QueryBody>) -> Ht
         limit: Some(size),
         ..Default::default()
     };
+    println!("{:?}", kwargs_sample);
     // use find to get a sample of the collection
     let options = build_options(None, kwargs_sample).await;
     let cursor = 
