@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use actix_web::{get, web, HttpResponse};
-use mongodb::{bson::doc, Client, Collection};
+use mongodb::{bson::{doc, Document}, Client, Collection, IndexModel};
 use futures::TryStreamExt;
 
 use crate::models::query_models::*;
@@ -66,45 +66,57 @@ async fn build_cone_search_filter(
     filter
 }
 
+
+pub async fn get_catalog_names(client: web::Data<Client>, db_name: &str) -> Vec<String> {
+    // get collection names in alphabetical order
+    let collection_names = client.database(db_name).list_collection_names().await.unwrap();
+    let mut data = collection_names
+        .iter().filter(|name| !name.starts_with("system.")).cloned()
+        .collect::<Vec<String>>();
+    data.sort();
+    return data;
+}
+
+pub async fn get_catalog_info(catalogs: Vec<String>, client: web::Data<Client>, db_name: &str) -> Vec<Document> {
+    let mut data = Vec::new();
+    for catalog in catalogs {
+        data.push(
+            client
+            .database(db_name)
+            .run_command(doc! { "collstats": format!("{}_alerts", catalog)}).await.unwrap());
+    }
+    return data;
+}
+
+pub async fn get_index_info(client: web::Data<Client>, catalogs: Vec<String>, db_name: &str) -> Vec<Vec<IndexModel>> {
+    let mut out_data = Vec::new();
+    for i in 0..catalogs.len() {
+        let collection: Collection<mongodb::bson::Document> = 
+            client.database(db_name).collection(&format!("{}_alerts", &catalogs[i]));
+        let cursor = collection.list_indexes().await.unwrap();
+        let data = cursor.try_collect::<Vec<mongodb::IndexModel>>().await.unwrap();
+        out_data.push(data);
+    }
+    return out_data;
+}
+
 #[get("/query/info")]
 pub async fn get_info(client: web::Data<Client>, body: web::Json<InfoQueryBody>) -> HttpResponse {
     let command = body.command.clone().expect("command required for info query");
     if !SUPPORTED_INFO_COMMANDS.contains(&command.as_str()) {
         return HttpResponse::BadRequest().body(format!("Unknown info query type {command}"));
     }
-
-    if command == "catalog_names" {
-        // get collection names in alphabetical order
-        let collection_names = client.database(DB_NAME).list_collection_names().await.unwrap();
-        let mut data = collection_names
-            .iter().filter(|name| !name.starts_with("system."))
-            .collect::<Vec<&String>>();
-        data.sort();
+    if command == "catalog_names" { // get collection names in alphabetical order
+        let data = get_catalog_names(client, DB_NAME).await;
         return HttpResponse::Ok().json(data);
-    } else if command == "catalog_info" {
-        // get collection statistics for catalog(s)
-        let catalogs = 
-            body.catalogs.clone().expect("catalog(s) is required for catalog info");
-        let mut data = Vec::new();
-        for catalog in catalogs {
-            data.push(
-                client
-                    .database(DB_NAME)
-                    .run_command(doc! { "collstats": format!("{}_alerts", catalog)}).await.unwrap());
-        }
+    } else if command == "catalog_info" { // get collection statistics for catalog(s)
+        let catalogs = body.catalogs.clone().expect("catalog(s) is required for catalog info");
+        let data = get_catalog_info(catalogs, client, DB_NAME).await;
         return HttpResponse::Ok().json(data);
-    } else if command == "index_info" {
-        // get list of indexes on the collection
-        let mut out_data = Vec::new();
+    } else if command == "index_info" { // get list of indexes on the collection
         let catalogs = body.catalogs.clone().expect("catalog(s) is required for index_info");
-        for i in 0..catalogs.len() {
-            let collection: Collection<mongodb::bson::Document> = 
-                client.database(DB_NAME).collection(&format!("{}_alerts", &catalogs[i]));
-            let cursor = collection.list_indexes().await.unwrap();
-            let data = cursor.try_collect::<Vec<mongodb::IndexModel>>().await.unwrap();
-            out_data.push(data);
-        }
-        return HttpResponse::Ok().json(out_data);
+        let data = get_index_info(client, catalogs, DB_NAME).await;
+        return HttpResponse::Ok().json(data);
     } else if command == "db_info" {
         let data = client.database(DB_NAME).run_command(doc! { "dbstats": 1 }).await.unwrap();
         return HttpResponse::Ok().json(data);
