@@ -23,10 +23,12 @@ pub async fn get_web_client() -> web::Data<Client> {
 // checks if two FindOptions structs have equal member values.
 // only checks members which are accessed by boom_api::api::query::build_options
 pub fn check_find_options_equal(a: FindOptions, b: FindOptions) -> bool {
-    assert_eq!(a.limit, b.limit);
-    assert_eq!(a.skip, b.skip);
-    assert_eq!(a.sort, b.sort);
-    assert_eq!(a.max_time, b.max_time);
+    if a.limit != b.limit || 
+        a.skip != b.skip || 
+        a.sort != b.sort || 
+        a.max_time != b.max_time {
+        return false;
+    }
     return true;
 }
 

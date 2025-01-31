@@ -11,14 +11,16 @@ const SUPPORTED_QUERY_TYPES: [&str; 5] = ["find", "cone_search", "sample", "info
 const SUPPORTED_INFO_COMMANDS: [&str; 4] = ["catalog_names", "catalog_info", "index_info", "db_info"];
 
 fn is_projection(projection: Option<Document>) -> bool {
-    if projection.is_none() {return false;}
-    let projection = projection.unwrap();
-    for key in projection.keys() {
-        if !key.contains("$project") {
-            return false;
+    return match projection {
+        None => true,
+        Some(proj) => {
+            if proj.contains_key("$project") {
+                true
+            } else {
+                false
+            }
         }
     }
-    return true;
 }
 
 pub fn build_options(
