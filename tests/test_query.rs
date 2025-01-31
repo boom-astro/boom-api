@@ -60,8 +60,8 @@ async fn test_build_options() {
 // trying to do filter_insert
 // 1) look into how Vec of documents can be viewed as a single filter
 // 2) if it doesn't work, just use a single doc! call instead of vec! inside of doc! call.
-#[actix_rt::test]
-async fn test_build_cone_search_filter() {
+#[test]
+fn test_build_cone_search_filter() {
     let radec = (91.0, 188.0);
     let unit = Unit::Degrees;
     let radius: f64 = 16.0;
@@ -88,7 +88,7 @@ async fn test_build_cone_search_filter() {
     let mut filter_a = filter.clone();
     filter_a.insert("coordinates.radec_geojson", geo_within);
     
-    let built_filter = query::build_cone_search_filter(filter, radec, radius, unit).await;
+    let built_filter = query::build_cone_search_filter(filter, radec, radius, unit);
     
     assert_eq!(filter_a, built_filter);
 

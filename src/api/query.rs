@@ -35,7 +35,7 @@ pub async fn build_options(
     find_options
 }
 
-pub async fn build_cone_search_filter(
+pub fn build_cone_search_filter(
     mut filter: mongodb::bson::Document,
     radec: (f64, f64),
     mut radius: f64,
@@ -207,7 +207,7 @@ pub async fn cone_search(client: web::Data<Client>, body: web::Json<ConeSearchBo
             (radec[0], radec[1]),
             radius,
             unit.clone()
-        ).await;
+        );
         // perform cone_search on database
         let cursor = collection
             .find(filter)
