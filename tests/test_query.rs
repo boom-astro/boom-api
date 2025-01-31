@@ -1,17 +1,11 @@
+use boom_api::api::query;
 #[cfg(test)]
 
 use boom_api::{
-    models::{
-        query_models::{
-            QueryBody,
-            QueryKwargs,
-            Query,
-            Unit,
-        }
-    },
+    models::{query_models::{QueryBody, QueryKwargs, Query, Unit,}},
     api::{query::build_options}
 };
-use mongodb::{bson::{doc, Document}, options::FindOptions};
+use mongodb::{bson::{doc, Document, Array}, options::FindOptions};
 
 // checks if two FindOptions structs have equal member values.
 // only checks members which are accessed by boom_api::api::query::build_options
@@ -66,74 +60,38 @@ async fn test_build_options() {
 // trying to do filter_insert
 // 1) look into how Vec of documents can be viewed as a single filter
 // 2) if it doesn't work, just use a single doc! call instead of vec! inside of doc! call.
-#[test]
-fn test_build_cone_search_filter() {
+#[actix_rt::test]
+async fn test_build_cone_search_filter() {
     let radec = (91.0, 188.0);
     let unit = Unit::Degrees;
-    let radius = 16.0;
+    let radius: f64 = 16.0;
 
-    let filter= vec![
-        doc! {
-            "$project": {
-                "cutoutScience": 0, 
-                "cutoutDifference": 0, 
-                "cutoutTemplate": 0, 
-                "publisher": 0, 
-                "schemavsn": 0
-            }
-        }, 
-        doc! {
-            "$lookup": {
-                "from": "alerts_aux", 
-                "localField": "objectId", 
-                "foreignField": "_id", 
-                "as": "aux"
-            }
-        }, 
-        doc! {
-            "$project": {
-                "objectId": 1, 
-                "candid": 1, 
-                "candidate": 1, 
-                "classifications": 1, 
-                "coordinates": 1, 
-                "prv_candidates": {
-                    "$arrayElemAt": ["$aux.prv_candidates", 0]
-                }, 
-                "cross_matches": {
-                    "$arrayElemAt": ["$aux.cross_matches", 0]
-                }
-            }
-        }, 
-        doc! {
-            "$match": {
-                "candidate.drb": {
-                    "$gt": 0.5
-                }, 
-                "candidate.ndethist": {
-                    "$gt": 1.0
-                }, 
-                "candidate.magpsf": {
-                    "$lte": 18.5
-                }
-            }
+    let filter= doc! {
+        "$project": {
+            "cutoutScience": 0, 
+            "cutoutDifference": 0, 
+            "cutoutTemplate": 0,
+            "publisher": 0, 
+            "schemavsn": 0
         }
-    ];
-
+    };
+    let radius_a = radius.to_radians();
     let ra = radec.0 - 180.0;
     let dec = radec.1;
-    
     let center_sphere = doc! {
-        "$centerSphere": [[ra, dec], radius]
+        "$centerSphere": [[ra, dec], radius_a]
     };
-
     let geo_within = doc! {
         "$geoWithin": center_sphere
     };
+    
+    let mut filter_a = filter.clone();
+    filter_a.insert("coordinates.radec_geojson", geo_within);
+    
+    let built_filter = query::build_cone_search_filter(filter, radec, radius, unit).await;
+    
+    assert_eq!(filter_a, built_filter);
 
-    filter.insert("coordinates.radec_geojson", geo_within);
-
-    filter
 }
 
 // TODO: test get_info functionality

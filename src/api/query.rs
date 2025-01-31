@@ -35,7 +35,7 @@ pub async fn build_options(
     find_options
 }
 
-async fn build_cone_search_filter(
+pub async fn build_cone_search_filter(
     mut filter: mongodb::bson::Document,
     radec: (f64, f64),
     mut radius: f64,
