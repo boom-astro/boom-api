@@ -10,12 +10,26 @@ const DB_NAME: &str = "boom";
 const SUPPORTED_QUERY_TYPES: [&str; 5] = ["find", "cone_search", "sample", "info", "count_documents"];
 const SUPPORTED_INFO_COMMANDS: [&str; 4] = ["catalog_names", "catalog_info", "index_info", "db_info"];
 
-pub async fn build_options(
+fn is_projection(projection: Option<Document>) -> bool {
+    if projection.is_none() {return false;}
+    let projection = projection.unwrap();
+    for key in projection.keys() {
+        if !key.contains("$project") {
+            return false;
+        }
+    }
+    return true;
+}
+
+pub fn build_options(
     projection: Option<mongodb::bson::Document>, 
     kwargs: QueryKwargs
 ) -> mongodb::options::FindOptions {
-    let mut find_options = mongodb::options::FindOptions::default();
-    
+    let mut find_options = 
+        mongodb::options::FindOptions::default();
+    if !is_projection(projection.clone()) {
+        panic!("projection must be a $project document");
+    }
     if kwargs.limit.is_some() {
         find_options.limit = Some(kwargs.limit.unwrap());
     }
@@ -26,7 +40,9 @@ pub async fn build_options(
         find_options.sort = Some(kwargs.sort.unwrap());
     }
     if kwargs.max_time_ms.is_some() {
-        find_options.max_time = Some(std::time::Duration::from_millis(kwargs.max_time_ms.unwrap()));
+        find_options.max_time = Some(
+            std::time::Duration::from_millis(kwargs.max_time_ms.unwrap())
+        );
     }
     if projection.is_some() {
         find_options.projection = Some(projection.unwrap());
@@ -142,7 +158,7 @@ pub async fn sample(client: web::Data<Client>, body: web::Json<QueryBody>) -> Ht
     };
     println!("{:?}", kwargs_sample);
     // use find to get a sample of the collection
-    let options = build_options(None, kwargs_sample).await;
+    let options = build_options(None, kwargs_sample);
     let cursor = 
         collection.find(doc! {}).with_options(options).await.unwrap();
     let docs = 
@@ -173,7 +189,7 @@ pub async fn find(client: web::Data<Client>, body: web::Json<QueryBody>) -> Http
     let catalog = this_query.catalog.expect("catalog is required for find");
     let find_options = build_options(
         this_query.projection, body.kwargs.clone().unwrap_or_default()
-    ).await;
+    );
     let collection: Collection<mongodb::bson::Document> = 
         client.database(DB_NAME).collection(&format!("{}_alerts", catalog));
     let cursor = collection.find(filter).with_options(find_options).await.unwrap();
@@ -198,7 +214,7 @@ pub async fn cone_search(client: web::Data<Client>, body: web::Json<ConeSearchBo
     let input_filter = catalog_details.filter.unwrap_or(doc! {});
 
     let kwargs = body.kwargs.clone().unwrap_or_default();
-    let find_options = build_options(projection, kwargs).await;
+    let find_options = build_options(projection, kwargs);
     
     let mut docs: HashMap<String, Vec<mongodb::bson::Document>> = HashMap::new();
     for (object_name, radec) in object_coordinates {
