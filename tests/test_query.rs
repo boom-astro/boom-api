@@ -120,13 +120,14 @@ fn test_build_cone_search_filter() {
     assert_eq!(built_filter, filter_correct);
 }
 
+// TODO
 // #[test]
 // #[should_panic]
 // fn build_cone_search_filter_bad_input() {
-    // TODO: think of bad input
+    
 // }
 
-// TODO: test get_info functionality
+// TODO
 #[actix_web::test]
 async fn test_get_catalog_names() {
     let client = get_web_client().await;

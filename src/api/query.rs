@@ -158,7 +158,6 @@ pub async fn sample(client: web::Data<Client>, body: web::Json<QueryBody>) -> Ht
         limit: Some(size),
         ..Default::default()
     };
-    println!("{:?}", kwargs_sample);
     // use find to get a sample of the collection
     let options = build_options(None, kwargs_sample);
     let cursor = 

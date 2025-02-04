@@ -51,20 +51,6 @@ pub struct CatalogDetails {
     pub projection: Option<mongodb::bson::Document>,
 }
 
-// new object coordinates struct
-// #[derive(serde::Deserialize, Clone)]
-// pub struct ObjectCoordinates {
-//     pub radec: Option<HashMap<String, [f64; 2]>>, 
-//     // pub radius: Option<f64>,
-//     // pub unit: Option<Unit>,
-// }
-
-// impl fmt::Debug for ObjectCoordinates {
-//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-//         write!(f, "{:?}", self.radec)
-//     }
-// }
-
 #[derive(serde::Deserialize, Clone)]
 pub struct Query {
     pub object_coordinates: Option<HashMap<String, [f64; 2]>>,
