@@ -176,12 +176,14 @@ development environment requirements:
 ```
 
 ## Find
-**Endpoint**: `GET "/query/sample"`\
+**Endpoint**: `GET "/query/find"`\
 **Body:**
 ```
 {
     "query": {
-        
-    }
+        "catalog": <catalog_name>,
+        "filter": <bson filter (aggregate pipeline)>,
+    },
+    "kwargs": {<kwargs>}
 }
 ```
