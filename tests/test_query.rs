@@ -1,3 +1,4 @@
+use boom_api::api::query::get_collection_sample;
 #[cfg(test)]
 
 use boom_api::{
@@ -9,6 +10,7 @@ use actix_web::web;
 
 // TODO: put in conf
 const DB_NAME: &str = "boom";
+const CATALOG_NAME: &str = "ZTF";
 
 // TODO: get info for client from the config file
 pub async fn get_web_client() -> web::Data<Client> {
@@ -18,6 +20,15 @@ pub async fn get_web_client() -> web::Data<Client> {
         .unwrap_or_else(|_| format!("mongodb://{user}:{pass}@localhost:27017").into());
     let client = Client::with_uri_str(uri).await.expect("failed to connect");
     web::Data::new(client)
+}
+
+// returns mongodb collection
+pub async fn get_database_collection() -> mongodb::Collection<Document> {
+    let client = get_web_client().await;
+    let collection = client
+        .database(DB_NAME)
+        .collection(&format!("{}_alerts", CATALOG_NAME));
+    collection
 }
 
 // checks if two FindOptions structs have equal member values.
@@ -120,16 +131,44 @@ fn test_build_cone_search_filter() {
     assert_eq!(built_filter, filter_correct);
 }
 
-// TODO
-// #[test]
-// #[should_panic]
-// fn build_cone_search_filter_bad_input() {
-    
-// }
-
-// TODO
-#[actix_web::test]
+#[actix_rt::test]
 async fn test_get_catalog_names() {
     let client = get_web_client().await;
     let _ = query::get_catalog_names(client, DB_NAME).await;
+}
+
+#[actix_rt::test]
+async fn test_get_catalog_info() {
+    let client = get_web_client().await;
+    let catalog_names = query::get_catalog_names(client.clone(), DB_NAME).await;
+    let catalog_name = if catalog_names.len() > 0 {
+        vec![catalog_names[0].clone()]
+    } else {
+        return;
+    };
+    let _ = query::get_catalog_info(catalog_name, client.clone(), DB_NAME);
+}
+
+#[actix_rt::test]
+async fn test_get_index_info() {
+    let client = get_web_client().await;
+    let catalog_names = query::get_catalog_names(client.clone(), DB_NAME).await;
+    let catalog_name = if catalog_names.len() > 0 {
+        vec![catalog_names[0].clone()]
+    } else {
+        return;
+    };
+    let _ = query::get_index_info(client, catalog_name, DB_NAME);
+}
+
+#[actix_rt::test]
+async fn test_get_db_info() {
+    let client = get_web_client().await;
+    let _ = query::get_db_info(client.clone(), DB_NAME).await;
+}
+
+#[actix_rt::test]
+async fn test_get_collection_sample() {
+    let collection = get_database_collection().await;
+    let _ = query::get_collection_sample(collection, 2).await;
 }
