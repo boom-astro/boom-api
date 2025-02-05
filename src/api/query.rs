@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use actix_web::{get, web, HttpResponse};
-use mongodb::{bson::{doc, Document}, Client, Collection, IndexModel};
+use mongodb::{bson::{doc, Document}, error::Error, options::FindOptions, Client, Collection, IndexModel};
 use futures::TryStreamExt;
 
 use crate::models::query_models::*;
@@ -118,6 +118,11 @@ pub async fn get_index_info(client: web::Data<Client>, catalogs: Vec<String>, db
     return out_data;
 }
 
+pub async fn get_db_info(client: web::Data<Client>, db_name: &str) -> Document {
+    let data = client.database(db_name).run_command(doc! { "dbstats": 1 }).await.unwrap();
+    return data;
+}
+
 #[get("/query/info")]
 pub async fn get_info(client: web::Data<Client>, body: web::Json<InfoQueryBody>) -> HttpResponse {
     let command = body.command.clone().expect("command required for info query");
@@ -136,23 +141,17 @@ pub async fn get_info(client: web::Data<Client>, body: web::Json<InfoQueryBody>)
         let data = get_index_info(client, catalogs, DB_NAME).await;
         return HttpResponse::Ok().json(data);
     } else if command == "db_info" {
-        let data = client.database(DB_NAME).run_command(doc! { "dbstats": 1 }).await.unwrap();
+        let data = get_db_info(client, DB_NAME).await;
         return HttpResponse::Ok().json(data);
     } else {
         return HttpResponse::BadRequest().body(format!("Unkown command {command}"));
     }
 }
 
-#[get("/query/sample")]
-pub async fn sample(client: web::Data<Client>, body: web::Json<QueryBody>) -> HttpResponse {
-    let this_query = body.query.clone().unwrap_or_default();
-    let catalog = this_query.catalog.unwrap();
-    let collection: Collection<mongodb::bson::Document> = 
-        client.database(DB_NAME).collection(&format!("{}_alerts", catalog));
-
-    let size = this_query.size.unwrap_or(1);
+pub async fn get_collection_sample(collection: Collection<Document>, size: i64) -> Option<Vec<Document>> {
     if size > 1000 {
-        return HttpResponse::BadRequest().body("size must be less than 1000");
+        println!("invalid sample size: {}", size);
+        return None;
     }
     let kwargs_sample = QueryKwargs {
         limit: Some(size),
@@ -164,6 +163,18 @@ pub async fn sample(client: web::Data<Client>, body: web::Json<QueryBody>) -> Ht
         collection.find(doc! {}).with_options(options).await.unwrap();
     let docs = 
         cursor.try_collect::<Vec<mongodb::bson::Document>>().await.unwrap();
+    return Some(docs);
+}
+
+#[get("/query/sample")]
+pub async fn sample(client: web::Data<Client>, body: web::Json<QueryBody>) -> HttpResponse {
+    let this_query = body.query.clone().unwrap_or_default();
+    println!("{:?}", this_query);
+    let catalog = this_query.catalog.unwrap();
+    let collection: Collection<mongodb::bson::Document> = 
+        client.database(DB_NAME).collection(&format!("{}_alerts", catalog));
+    let size = this_query.size.unwrap_or(1);
+    let docs = get_collection_sample(collection, size).await;
     HttpResponse::Ok().json(docs)
 }
 
