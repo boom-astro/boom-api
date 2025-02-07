@@ -1,13 +1,13 @@
 # README
 development environment requirements:
 1. active boom mongodb instance
-2. postman for query testing
+2. postman (or some way of making api calls) for querying
 
 # Api Documentation
 
 # Filtering
 
-## submit filter
+## submit filter (W.I.P.)
 **Endpoint**: `POST "/filter`\
 **Body**:
 ```
@@ -88,6 +88,7 @@ development environment requirements:
 ## Info
 **Endpoint**: `Get "/query/info"`\
 **command_types**: "db_info", "index_info", "catalog_info", "catalog_names"\
+**catalog_names**: Array Strings. e.g., `["ZTF_alerts",...]` (not required for db_info, catalog_names)\
 **Body**: 
 ```
 {
@@ -98,11 +99,19 @@ development environment requirements:
 
 ## Get Object
 **Endpoint**: `Get "/alerts/get_object"`\
+**catalog_name**: String. e.g., "ZTF_alerts"\
 **Body**:
 ```
 {
     "catalog": <catalog_name>,
     "object_id": <objectId>
+}
+```
+**Example Body**:
+```
+{
+    "catalog": "ZTF",
+    "object_id": "ZTF18aajpnun"
 }
 ```
 
@@ -145,31 +154,32 @@ development environment requirements:
         "catalog_name": "NED",
         "filter": {},
         "projection": {}
-    },
+    }
 }
 ```
 
 ## Count Documents
 **Endpoint**: `GET "/query/count_documents"`\
+**catalog_name**: String. e.g., "ZTF_alerts"\
 **Body:**
 ```
 {
     "query": {
-        "catalogs": [<catalog_names>],
+        "catalog": <catalog_name>,
         "filter": {},
         "projection": {},
-
     }
 }
 ```
 
 ## Sample
 **Endpoint**: `GET "/query/sample"`\
+**catalog_name**: String. e.g., "ZTF_alerts"\
 **Body:**
 ```
 {
     "query": {
-        "catatlog": <catalog_name>,
+        "catalog": <catalog_name>,
         "size": <int>
     }
 }
@@ -177,13 +187,26 @@ development environment requirements:
 
 ## Find
 **Endpoint**: `GET "/query/find"`\
+**catalog_name**: String. e.g., "ZTF_alerts"\
 **Body:**
 ```
 {
     "query": {
         "catalog": <catalog_name>,
-        "filter": <bson filter (aggregate pipeline)>,
+        "filter": <bson filter (aggregate pipeline)>
     },
     "kwargs": {<kwargs>}
+}
+```
+**Example Body**:
+```
+{
+    "query": {
+        "catalog": "ZTF_alerts",
+        "filter": {}
+    },
+    "kwargs": {
+        "limit": 1
+    }
 }
 ```

@@ -1,4 +1,3 @@
-use boom_api::api::query::get_collection_sample;
 #[cfg(test)]
 
 use boom_api::{
@@ -6,7 +5,7 @@ use boom_api::{
     api::{query::build_options, query}
 };
 use mongodb::{bson::{doc, Document}, options::FindOptions, Client};
-use actix_web::web;
+use actix_web::{test::{self, TestRequest}, web};
 
 // TODO: put in conf
 const DB_NAME: &str = "boom";
@@ -171,4 +170,25 @@ async fn test_get_db_info() {
 async fn test_get_collection_sample() {
     let collection = get_database_collection().await;
     let _ = query::get_collection_sample(collection, 2).await;
+}
+
+#[actix_rt::test]
+#[should_panic]
+async fn test_get_collection_sample_negative_size() {
+    let collection = get_database_collection().await;
+    let _ = query::get_collection_sample(collection, -1).await;
+}
+
+#[actix_rt::test]
+#[should_panic]
+async fn test_get_collection_sample_size_too_large() {
+    let collection = get_database_collection().await;
+    let _ = query::get_collection_sample(collection, 1001).await;
+}
+
+#[actix_rt::test]
+async fn test_count_documents() {
+    let collection = get_database_collection().await;
+    let filter = doc! {};
+    let _ = collection.count_documents(filter).await.unwrap();
 }

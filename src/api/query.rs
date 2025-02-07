@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use actix_web::{get, web, HttpResponse};
-use mongodb::{bson::{doc, Document}, error::Error, options::FindOptions, Client, Collection, IndexModel};
+use mongodb::{bson::{doc, Document}, Client, Collection, IndexModel};
 use futures::TryStreamExt;
 
 use crate::models::query_models::*;
@@ -18,29 +18,15 @@ const SUPPORTED_INFO_COMMANDS: [&str; 4] = [
 ];
 
 // retrieves a catalog's mongo alert collection ("<catalog_name>_alerts")
-fn get_alerts_collection(
+fn get_collection(
     client: web::Data<Client>,
     catalog_name: &str,
     db_name: &str
 ) -> Collection<Document> {
     let collection: Collection<mongodb::bson::Document> = client
         .database(db_name)
-        .collection(&format!("{}_alerts", catalog_name));
+        .collection(catalog_name);
     collection
-}
-
-// (temp) rudementary function to check if a mongo filter is a projection
-fn is_projection(projection: Option<Document>) -> bool {
-    return match projection {
-        None => true,
-        Some(proj) => {
-            if proj.contains_key("$project") {
-                true
-            } else {
-                false
-            }
-        }
-    }
 }
 
 pub fn build_options(
@@ -49,9 +35,6 @@ pub fn build_options(
 ) -> mongodb::options::FindOptions {
     let mut find_options = 
         mongodb::options::FindOptions::default();
-    if !is_projection(projection.clone()) {
-        panic!("projection must be a $project document");
-    }
     if kwargs.limit.is_some() {
         find_options.limit = Some(kwargs.limit.unwrap());
     }
@@ -139,7 +122,7 @@ pub async fn get_index_info(
     let mut out_data = Vec::new();
     for i in 0..catalogs.len() {
         let collection = 
-            get_alerts_collection(
+            get_collection(
                 client.clone(),
                 &catalogs[i],
                 db_name);
@@ -165,11 +148,10 @@ pub async fn get_db_info(
 // retrieves a sample of a database collection
 pub async fn get_collection_sample(
     collection: Collection<Document>,
-     size: i64
+    size: i64
 ) -> Option<Vec<Document>> {
-    if size > 1000 {
-        println!("invalid sample size: {}", size);
-        return None;
+    if size > 1000 || size < 0 {
+        panic!("invalid sample size: {}", size);
     }
     let kwargs_sample = QueryKwargs {
         limit: Some(size),
@@ -229,9 +211,10 @@ pub async fn sample(
     body: web::Json<QueryBody>
 ) -> HttpResponse {
     let this_query = body.query.clone().unwrap_or_default();
-    let catalog = this_query.catalog.unwrap();
+    let catalog = this_query.catalog
+        .expect("catalog name required for sample");
     let collection: Collection<Document> = 
-        get_alerts_collection(client, &catalog, DB_NAME);
+        get_collection(client, &catalog, DB_NAME);
     let size = this_query.size.unwrap_or(1);
     let docs = 
         get_collection_sample(collection, size).await;
@@ -244,9 +227,10 @@ pub async fn count_documents(
     body: web::Json<QueryBody>
 ) -> HttpResponse {
     let this_query = body.query.clone().unwrap_or_default();
-    let catalog = this_query.catalog.unwrap();
+    let catalog = this_query.catalog
+        .expect("catalog name required for count documents");
     let collection = 
-        get_alerts_collection(client, &catalog, DB_NAME);
+        get_collection(client, &catalog, DB_NAME);
     let filter = this_query.filter.unwrap_or(doc!{});
     let doc_count = collection
         .count_documents(filter).await;
@@ -273,7 +257,7 @@ pub async fn find(
         this_query.projection, body.kwargs.clone().unwrap_or_default()
     );
     let collection = 
-        get_alerts_collection(client, &catalog, DB_NAME);
+        get_collection(client, &catalog, DB_NAME);
     let cursor = collection
         .find(filter)
         .with_options(find_options).await.unwrap();
@@ -301,15 +285,17 @@ pub async fn cone_search(
     let catalog = catalog_details
         .catalog_name
         .expect("catalog_name required for a catalog");
+    
     let collection = 
-        get_alerts_collection(client, &catalog, DB_NAME);
-
+        get_collection(client, &catalog, DB_NAME);
+    
     let projection = catalog_details.projection;
     let input_filter = catalog_details.filter.unwrap_or(doc! {});
 
     let kwargs = body.kwargs.clone().unwrap_or_default();
     let find_options = build_options(projection, kwargs);
     
+    // perform cone search over each set of object coordinates
     let mut docs: HashMap<String, Vec<mongodb::bson::Document>> = HashMap::new();
     for (object_name, radec) in object_coordinates {
         let filter = build_cone_search_filter(
@@ -318,6 +304,7 @@ pub async fn cone_search(
             radius,
             unit.clone()
         );
+
         // perform cone_search on database
         let cursor = collection
             .find(filter)
