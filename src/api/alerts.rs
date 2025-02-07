@@ -1,6 +1,8 @@
 
+use std::ops::BitOrAssign;
+
 use actix_web::{get, web, HttpResponse};
-use mongodb::{Collection, Client, bson::doc};
+use mongodb::{bson::{doc, Document}, Client, Collection};
 use futures::TryStreamExt;
 use crate::models::alert_models;
 
@@ -29,8 +31,15 @@ pub async fn get_object(client: web::Data<Client>, body: web::Json<alert_models:
     let mut brightest_alert_cursor = collection.find(doc! {
         "objectId": object_id.to_string(),
     }).with_options(find_options).await.expect("failed to execute find query");
-    let brightest_alert = brightest_alert_cursor.try_next().await
-        .expect("failed to get next document").expect("no document found");
+    let brightest_alert = match brightest_alert_cursor.try_next().await {
+        Ok(Some(alert)) => alert,
+        Ok(None) => {
+            return HttpResponse::Ok().body(format!("no object found with id {}", object_id));
+        },
+        Err(error) => {
+            return HttpResponse::BadRequest().body(format!("error: {}", error));
+        }
+    };
 
     let find_options_alerts = mongodb::options::FindOptions::builder()
         .projection(
@@ -53,7 +62,7 @@ pub async fn get_object(client: web::Data<Client>, body: web::Json<alert_models:
     }).with_options(find_options_alerts).await.unwrap();
     let alerts = cursor_alerts.try_collect::<Vec<mongodb::bson::Document>>().await.unwrap();
 
-    let aux_collection_name = format!("{catalog}_aux");
+    let aux_collection_name = format!("{catalog}_alerts_aux");
     // then fetch the entry for that object in the aux collection
     let aux_collection: Collection<mongodb::bson::Document> = 
         client.database(DB_NAME).collection(aux_collection_name.as_str());
