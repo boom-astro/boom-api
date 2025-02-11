@@ -1,11 +1,17 @@
-#[cfg(test)]
-
-use boom_api::{
-    models::{query_models::{QueryBody, QueryKwargs, Query, Unit,}},
-    api::{query::build_options, query}
+use actix_web::{
+    test::{self, TestRequest},
+    web,
 };
-use mongodb::{bson::{doc, Document}, options::FindOptions, Client};
-use actix_web::{test::{self, TestRequest}, web};
+#[cfg(test)]
+use boom_api::{
+    api::{query, query::build_options},
+    models::query_models::{Query, QueryBody, QueryKwargs, Unit},
+};
+use mongodb::{
+    bson::{doc, Document},
+    options::FindOptions,
+    Client,
+};
 
 // TODO: put in conf
 const DB_NAME: &str = "boom";
@@ -33,10 +39,7 @@ pub async fn get_database_collection() -> mongodb::Collection<Document> {
 // checks if two FindOptions structs have equal member values.
 // only checks members which are accessed by boom_api::api::query::build_options
 pub fn check_find_options_equal(a: FindOptions, b: FindOptions) -> bool {
-    if a.limit != b.limit || 
-        a.skip != b.skip || 
-        a.sort != b.sort || 
-        a.max_time != b.max_time {
+    if a.limit != b.limit || a.skip != b.skip || a.sort != b.sort || a.max_time != b.max_time {
         return false;
     }
     return true;
@@ -46,11 +49,10 @@ pub fn check_find_options_equal(a: FindOptions, b: FindOptions) -> bool {
 
 #[actix_rt::test]
 async fn test_build_options() {
-
     let test_projection_good = Some(doc! {
         "$project": {
-            "objectId": 1, 
-            "candid": 1, 
+            "objectId": 1,
+            "candid": 1,
             "candidate": 1,
         }
     });
@@ -62,20 +64,30 @@ async fn test_build_options() {
 
     // test default
     let default_options_test = build_options(
-        None, QueryKwargs {..Default::default()});
+        None,
+        QueryKwargs {
+            ..Default::default()
+        },
+    );
     let default_options = mongodb::options::FindOptions::default();
-    assert!(check_find_options_equal(default_options, default_options_test));
+    assert!(check_find_options_equal(
+        default_options,
+        default_options_test
+    ));
 
     // test sample projection and default kwargs
     let proj_options_test = build_options(
-        test_projection_good.clone(), QueryKwargs {..Default::default()});
+        test_projection_good.clone(),
+        QueryKwargs {
+            ..Default::default()
+        },
+    );
     let mut proj_options = mongodb::options::FindOptions::default();
     proj_options.projection = test_projection_good.clone();
     assert!(check_find_options_equal(proj_options_test, proj_options));
 
     // test sample projection with sample kwargs
-    let full_options_test = build_options(
-        test_projection_good.clone(), test_kwargs.clone());
+    let full_options_test = build_options(test_projection_good.clone(), test_kwargs.clone());
     let mut full_options = mongodb::options::FindOptions::default();
     full_options.projection = test_projection_good.clone();
     full_options.limit = test_kwargs.limit;
@@ -87,13 +99,17 @@ async fn test_build_options() {
 fn test_build_options_bad_input() {
     let test_projection_bad = Some(doc! {
         "$match": {
-            "objectId": 1, 
-            "candid": 1, 
+            "objectId": 1,
+            "candid": 1,
             "candidate": 1,
         }
     });
     let _ = build_options(
-        test_projection_bad, QueryKwargs {..Default::default()});
+        test_projection_bad,
+        QueryKwargs {
+            ..Default::default()
+        },
+    );
 }
 
 #[test]
@@ -104,19 +120,19 @@ fn test_build_cone_search_filter() {
 
     let init_filter = doc! {
         "$project": doc! {
-            "cutoutScience": 0, 
-            "cutoutDifference": 0, 
-            "cutoutTemplate": 0, 
-            "publisher": 0, 
+            "cutoutScience": 0,
+            "cutoutDifference": 0,
+            "cutoutTemplate": 0,
+            "publisher": 0,
             "schemavsn": 0
         }
     };
 
     let filter_correct = doc! {
         "$project": doc! {
-            "cutoutScience": 0, 
-            "cutoutDifference": 0, 
-            "cutoutTemplate": 0, 
+            "cutoutScience": 0,
+            "cutoutDifference": 0,
+            "cutoutTemplate": 0,
             "publisher": 0,
             "schemavsn": 0
         },

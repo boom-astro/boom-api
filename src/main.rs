@@ -5,7 +5,7 @@ endpoints:
     - cone_search   (performs a cone search based on the given data)
     - find          (mongodb:find operation)
     - sample        (given a catalog return one or more documents, without any filters)
-    - info          (that can take a few commands including: list catalog names, 
+    - info          (that can take a few commands including: list catalog names,
                     give info/metadata about catalog, including info about indexes)
 2. Filter
     - post_filter (posts a user's filter to the database)
@@ -17,14 +17,13 @@ endpoints:
     Each of the query types are infered by the api upon receiving the request.
     The query type is located inside of a JSON object with string field "query_type".
     To submit a query, post to "/api/queries/" with the corresponding JSON payload.
-    
+
 */
 mod api;
 mod models;
 
 use actix_web::{web, App, HttpServer};
 use mongodb::Client;
-
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -33,7 +32,7 @@ async fn main() -> std::io::Result<()> {
     let uri = std::env::var("MONGODB_URI")
         .unwrap_or_else(|_| format!("mongodb://{user}:{pass}@localhost:27017").into());
     let client = Client::with_uri_str(uri).await.expect("failed to connect");
-    
+
     HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(client.clone()))
@@ -50,7 +49,6 @@ async fn main() -> std::io::Result<()> {
     .await
 }
 
-
 // mod query;
 
 // #[actix_web::main]
@@ -60,7 +58,7 @@ async fn main() -> std::io::Result<()> {
 //     let uri = std::env::var("MONGODB_URI")
 //         .unwrap_or_else(|_| format!("mongodb://{user}:{pass}@localhost:27017").into());
 //     let client = Client::with_uri_str(uri).await.expect("failed to connect");
-    
+
 //     HttpServer::new(move || {
 //         App::new()
 //             .app_data(web::Data::new(client.clone()))

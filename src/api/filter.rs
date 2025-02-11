@@ -1,6 +1,9 @@
-use mongodb::{bson::{doc, Document}, Client, Collection};
-use actix_web::{post, web, HttpResponse};
 use crate::models::filter_models::*;
+use actix_web::{post, web, HttpResponse};
+use mongodb::{
+    bson::{doc, Document},
+    Client, Collection,
+};
 
 const DB_NAME: &str = "boom";
 
@@ -13,10 +16,10 @@ struct Filter {
 
 // prepends necessary portions to filter to run in database
 fn build_test_filter(
-    filter_catalog: String, 
-    filter_id: i32, 
-    filter_perms: Vec<i64>, 
-    mut filter_pipeline: Vec<Document>
+    filter_catalog: String,
+    filter_id: i32,
+    filter_perms: Vec<i64>,
+    mut filter_pipeline: Vec<Document>,
 ) -> Filter {
     let mut out_filter = vec![
         doc! {
@@ -82,7 +85,7 @@ fn build_test_filter(
                     }
                 },
             }
-        }
+        },
     ];
     out_filter.append(&mut filter_pipeline);
     let built_filt = Filter {
@@ -96,18 +99,19 @@ fn build_test_filter(
 
 // tests the functionality of a filter by running it on alerts in database
 async fn test_filter(
-    client: web::Data<Client>, 
-    catalog: String, 
-    filter: Filter
+    client: web::Data<Client>,
+    catalog: String,
+    filter: Filter,
 ) -> Result<(), mongodb::error::Error> {
-    let collection: Collection<mongodb::bson::Document> = 
-        client.database(DB_NAME).collection(format!("{}_alerts", catalog).as_str());
-    
+    let collection: Collection<mongodb::bson::Document> = client
+        .database(DB_NAME)
+        .collection(format!("{}_alerts", catalog).as_str());
+
     let result = collection.aggregate(filter.pipeline).await;
     match result {
         Ok(_) => {
             return Ok(());
-        },
+        }
         Err(e) => {
             return Err(e);
         }
@@ -115,9 +119,7 @@ async fn test_filter(
 }
 
 // takes tested filter and builds the properly formatted bson document for the database
-fn build_filter_bson(
-    filter: Filter
-) -> Result<mongodb::bson::Document, mongodb::error::Error> {
+fn build_filter_bson(filter: Filter) -> Result<mongodb::bson::Document, mongodb::error::Error> {
     // generate new object id
     let id = mongodb::bson::oid::ObjectId::new();
     let date_time = mongodb::bson::DateTime::now();
@@ -152,8 +154,8 @@ fn build_filter_bson(
 //            allows user to submit a filter to the database
 #[post("/filter")]
 pub async fn post_filter(
-    client: web::Data<Client>, 
-    body: web::Json<FilterSubmissionBody>
+    client: web::Data<Client>,
+    body: web::Json<FilterSubmissionBody>,
 ) -> HttpResponse {
     let body = body.clone();
     // 1. grab user filter
@@ -161,16 +163,15 @@ pub async fn post_filter(
     let id = body.id.expect("filter id required");
     let permissions = body.permissions.expect("filter permissions required");
     let pipeline = body.pipeline.expect("filter pipeline required");
-    
+
     // Test filter
-    
+
     // 1. create production version of filter
-    let filter = build_test_filter(
-        catalog.clone(), id, permissions.clone(), pipeline.clone());
-    
+    let filter = build_test_filter(catalog.clone(), id, permissions.clone(), pipeline.clone());
+
     // 2. perform test run to ensure no errors
     match test_filter(client.clone(), catalog.clone(), filter).await {
-        Ok(()) => {},
+        Ok(()) => {}
         Err(e) => {
             println!("could not submit filter to database, got error: {}", e);
             return HttpResponse::BadRequest().body(format!("Invalid filter submitted"));
@@ -178,18 +179,16 @@ pub async fn post_filter(
     }
 
     // save original filter to database
-    let filter_collection: Collection<mongodb::bson::Document> = 
+    let filter_collection: Collection<mongodb::bson::Document> =
         client.database(DB_NAME).collection("filters");
     let database_filter = Filter {
         pipeline: pipeline,
         permissions: permissions,
         catalog: catalog,
-        id: id
+        id: id,
     };
     let filter_bson = match build_filter_bson(database_filter) {
-        Ok(bson) => {
-            bson
-        },
+        Ok(bson) => bson,
         Err(e) => {
             println!("unable to create filter bson, got error {}", e);
             return HttpResponse::BadRequest().body("unable to create filter bson");
@@ -198,11 +197,12 @@ pub async fn post_filter(
     match filter_collection.insert_one(filter_bson).await {
         Ok(_) => {
             return HttpResponse::Ok().body("successfully submitted filter to database");
-        },
+        }
         Err(e) => {
-            return HttpResponse::BadRequest().body(
-                format!("failed to insert filter into database. error: {}", e)
-            );
+            return HttpResponse::BadRequest().body(format!(
+                "failed to insert filter into database. error: {}",
+                e
+            ));
         }
     }
 }

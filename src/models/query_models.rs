@@ -1,5 +1,5 @@
-use std::{collections::HashMap, fmt};
 use mongodb::bson::doc;
+use std::{collections::HashMap, fmt};
 
 #[derive(serde::Deserialize, Clone)]
 pub struct InfoQueryBody {
@@ -74,13 +74,11 @@ impl Default for Query {
 
 impl fmt::Debug for Query {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, 
-            "{:?},\n{:?},\n{:?},\n{:?},\n{:?}", 
-            self.object_coordinates, 
-            self.catalog,
-            self.filter,
-            self.projection,
-            self.size)
+        write!(
+            f,
+            "{:?},\n{:?},\n{:?},\n{:?},\n{:?}",
+            self.object_coordinates, self.catalog, self.filter, self.projection, self.size
+        )
     }
 }
 
@@ -105,8 +103,11 @@ impl Default for QueryKwargs {
 
 impl fmt::Debug for QueryKwargs {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, 
-            "{:?},\n{:?},\n{:?},\n{:?}\n", self.limit, self.skip, self.sort, self.max_time_ms)
+        write!(
+            f,
+            "{:?},\n{:?},\n{:?},\n{:?}\n",
+            self.limit, self.skip, self.sort, self.max_time_ms
+        )
     }
 }
 
