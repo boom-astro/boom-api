@@ -1,5 +1,3 @@
-use std::ops::BitOrAssign;
-
 use crate::models::alert_models;
 use actix_web::{get, web, HttpResponse};
 use futures::TryStreamExt;
@@ -45,7 +43,7 @@ pub async fn get_object(
             return HttpResponse::Ok().body(format!("no object found with id {}", object_id));
         }
         Err(error) => {
-            return HttpResponse::BadRequest().body(format!("error: {}", error));
+            return HttpResponse::InternalServerError().body(format!("error: {}", error));
         }
     };
 
