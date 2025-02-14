@@ -7,16 +7,12 @@ use mongodb::{
 use std::collections::HashMap;
 
 use crate::models::query_models::*;
+use crate::models::response::ApiResponse;
 
 const DB_NAME: &str = "boom";
 
-// const SUPPORTED_QUERY_TYPES: [&str; 5] = [
-//     "find", "cone_search", "sample", "info", "count_documents"
-// ];
-const SUPPORTED_INFO_COMMANDS: [&str; 4] =
-    ["catalog_names", "catalog_info", "index_info", "db_info"];
-
-// retrieves a catalog's mongo alert collection ("<catalog_name>_alerts")
+// retrieves a mongodb collection
+// TODO: add check here for valid catalog names
 fn get_collection(
     client: web::Data<Client>,
     catalog_name: &str,
@@ -27,6 +23,7 @@ fn get_collection(
     collection
 }
 
+// builds find options for mongo query
 pub fn build_options(
     projection: Option<mongodb::bson::Document>,
     kwargs: QueryKwargs,
@@ -78,76 +75,91 @@ pub fn build_cone_search_filter(
     filter
 }
 
-pub async fn get_catalog_names(client: web::Data<Client>, db_name: &str) -> Vec<String> {
+pub async fn get_catalog_names(
+    client: web::Data<Client>,
+    db_name: &str,
+) -> Result<Vec<String>, mongodb::error::Error> {
     // get collection names in alphabetical order
-    let collection_names = client
-        .database(db_name)
-        .list_collection_names()
-        .await
-        .unwrap();
+    let collection_names = match client.database(db_name).list_collection_names().await {
+        Ok(c) => c,
+        Err(e) => return Err(e),
+    };
     let mut data = collection_names
         .iter()
         .filter(|name| !name.starts_with("system."))
         .cloned()
         .collect::<Vec<String>>();
     data.sort();
-    return data;
+    return Ok(data);
 }
 
 pub async fn get_catalog_info(
-    catalogs: Vec<String>,
     client: web::Data<Client>,
+    catalogs: Vec<String>,
     db_name: &str,
-) -> Vec<Document> {
+) -> Result<Vec<Document>, mongodb::error::Error> {
     let mut data = Vec::new();
     for catalog in catalogs {
-        data.push(
-            client
-                .database(db_name)
-                .run_command(doc! {
-                    "collstats": format!("{}_alerts", catalog)
-                })
-                .await
-                .unwrap(),
-        );
+        match client
+            .database(db_name)
+            .run_command(doc! {
+                "collstats": catalog
+            })
+            .await
+        {
+            Ok(d) => data.push(d),
+            Err(e) => return Err(e),
+        };
     }
-    return data;
+    return Ok(data);
 }
 
 pub async fn get_index_info(
     client: web::Data<Client>,
     catalogs: Vec<String>,
     db_name: &str,
-) -> Vec<Vec<IndexModel>> {
+) -> Result<Vec<Vec<IndexModel>>, mongodb::error::Error> {
     let mut out_data = Vec::new();
     for i in 0..catalogs.len() {
         let collection = get_collection(client.clone(), &catalogs[i], db_name);
-        let cursor = collection.list_indexes().await.unwrap();
-        let data = cursor
-            .try_collect::<Vec<mongodb::IndexModel>>()
-            .await
-            .unwrap();
+        let cursor = match collection.list_indexes().await {
+            Ok(c) => c,
+            Err(e) => return Err(e),
+        };
+        let data = match cursor.try_collect::<Vec<mongodb::IndexModel>>().await {
+            Ok(d) => d,
+            Err(e) => return Err(e),
+        };
         out_data.push(data);
     }
-    return out_data;
+    return Ok(out_data);
 }
 
-pub async fn get_db_info(client: web::Data<Client>, db_name: &str) -> Document {
-    let data = client
+pub async fn get_db_info(
+    client: web::Data<Client>,
+    db_name: &str,
+) -> Result<Document, mongodb::error::Error> {
+    let data = match client
         .database(db_name)
         .run_command(doc! { "dbstats": 1 })
         .await
-        .unwrap();
-    return data;
+    {
+        Ok(d) => d,
+        Err(e) => return Err(e),
+    };
+    return Ok(data);
 }
 
 // retrieves a sample of a database collection
 pub async fn get_collection_sample(
     collection: Collection<Document>,
     size: i64,
-) -> Option<Vec<Document>> {
+) -> Result<Option<Vec<Document>>, mongodb::error::Error> {
     if size > 1000 || size < 0 {
-        panic!("invalid sample size: {}", size);
+        return Err(mongodb::error::Error::from(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "sample size must be between 0 and 1000",
+        )));
     }
     let kwargs_sample = QueryKwargs {
         limit: Some(size),
@@ -155,65 +167,129 @@ pub async fn get_collection_sample(
     };
     // use find to get a sample of the collection
     let options = build_options(None, kwargs_sample);
-    let cursor = collection
-        .find(doc! {})
-        .with_options(options)
-        .await
-        .unwrap();
-    let docs = cursor
-        .try_collect::<Vec<mongodb::bson::Document>>()
-        .await
-        .unwrap();
-    return Some(docs);
+    let cursor = match collection.find(doc! {}).with_options(options).await {
+        Ok(c) => c,
+        Err(e) => {
+            return Err(e);
+        }
+    };
+    let docs = match cursor.try_collect::<Vec<mongodb::bson::Document>>().await {
+        Ok(d) => d,
+        Err(e) => {
+            return Err(e);
+        }
+    };
+    return Ok(Some(docs));
 }
 
 #[get("/query/info")]
 pub async fn get_info(client: web::Data<Client>, body: web::Json<InfoQueryBody>) -> HttpResponse {
-    let command = body
-        .command
-        .clone()
-        .expect("command required for info query");
-    if !SUPPORTED_INFO_COMMANDS.contains(&command.as_str()) {
-        return HttpResponse::BadRequest().body(format!("Unknown info query type {command}"));
-    }
+    let command = match body.command.clone() {
+        Some(c) => c,
+        None => {
+            return HttpResponse::BadRequest()
+                .json(ApiResponse::bad_request("command required for info query"))
+        }
+    };
     // get collection names in alphabetical order
     if command == "catalog_names" {
-        let data = get_catalog_names(client, DB_NAME).await;
-        return HttpResponse::Ok().json(data);
+        let data = match get_catalog_names(client, DB_NAME).await {
+            Ok(d) => d,
+            Err(e) => {
+                return HttpResponse::InternalServerError().json(ApiResponse::internal_error(
+                    &format!("Error getting catalog names: {:?}", e),
+                ));
+            }
+        };
+        return HttpResponse::Ok().json(ApiResponse::ok("Catalog names", serde_json::json!(data)));
     // get collection statistics for catalog(s)
     } else if command == "catalog_info" {
-        let catalogs = body
-            .catalogs
-            .clone()
-            .expect("catalog(s) is required for catalog info");
-        let data = get_catalog_info(catalogs, client, DB_NAME).await;
-        return HttpResponse::Ok().json(data);
+        let catalogs = match body.catalogs.clone() {
+            Some(c) => c,
+            None => {
+                return HttpResponse::BadRequest().json(ApiResponse::bad_request(
+                    "catalog(s) required for catalog_info",
+                ))
+            }
+        };
+        let data = match get_catalog_info(client, catalogs.clone(), DB_NAME).await {
+            Ok(d) => d,
+            Err(e) => {
+                return HttpResponse::InternalServerError().json(ApiResponse::internal_error(
+                    &format!("Error getting catalog info: {:?}", e),
+                ));
+            }
+        };
+        return HttpResponse::Ok().json(ApiResponse::ok(
+            &format!("Catalog info for {:?}", catalogs),
+            serde_json::json!(data),
+        ));
     // get list of indexes on the collection
     } else if command == "index_info" {
-        let catalogs = body
-            .catalogs
-            .clone()
-            .expect("catalog(s) is required for index_info");
-        let data = get_index_info(client, catalogs, DB_NAME).await;
-        return HttpResponse::Ok().json(data);
+        let catalogs = match body.catalogs.clone() {
+            Some(c) => c,
+            None => {
+                return HttpResponse::BadRequest().json(ApiResponse::bad_request(
+                    "catalog(s) required for index_info",
+                ))
+            }
+        };
+        let data = get_index_info(client, catalogs.clone(), DB_NAME).await;
+        match data {
+            Ok(d) => {
+                return HttpResponse::Ok().json(ApiResponse::ok(
+                    &format!("Index info for {:?}", catalogs),
+                    serde_json::json!(d),
+                ));
+            }
+            Err(e) => {
+                return HttpResponse::InternalServerError().json(ApiResponse::internal_error(
+                    &format!("Error getting index info: {:?}", e),
+                ));
+            }
+        }
     } else if command == "db_info" {
-        let data = get_db_info(client, DB_NAME).await;
-        return HttpResponse::Ok().json(data);
+        let data = match get_db_info(client, DB_NAME).await {
+            Ok(d) => d,
+            Err(e) => {
+                return HttpResponse::InternalServerError().json(ApiResponse::internal_error(
+                    &format!("Error getting database info: {:?}", e),
+                ));
+            }
+        };
+        return HttpResponse::Ok().json(ApiResponse::ok("Database info", serde_json::json!(data)));
     } else {
-        return HttpResponse::BadRequest().body(format!("Unkown command {command}"));
+        return HttpResponse::BadRequest().json(ApiResponse::bad_request(&format!(
+            "Unknown command: {}",
+            command
+        )));
     }
 }
 
 #[get("/query/sample")]
 pub async fn sample(client: web::Data<Client>, body: web::Json<QueryBody>) -> HttpResponse {
     let this_query = body.query.clone().unwrap_or_default();
-    let catalog = this_query
-        .catalog
-        .expect("catalog name required for sample");
+    let catalog = match this_query.catalog {
+        Some(c) => c,
+        None => {
+            return HttpResponse::BadRequest()
+                .json(ApiResponse::bad_request("catalog name required for sample"))
+        }
+    };
     let collection: Collection<Document> = get_collection(client, &catalog, DB_NAME);
     let size = this_query.size.unwrap_or(1);
-    let docs = get_collection_sample(collection, size).await;
-    HttpResponse::Ok().json(docs)
+    let docs = match get_collection_sample(collection, size).await {
+        Ok(d) => d,
+        Err(e) => {
+            return HttpResponse::InternalServerError().json(ApiResponse::internal_error(
+                &format!("Error getting sample: {:?}", e),
+            ));
+        }
+    };
+    HttpResponse::Ok().json(ApiResponse::ok(
+        &format!("Sample of collection: {}", catalog),
+        serde_json::json!(docs),
+    ))
 }
 
 #[get("/query/count_documents")]
@@ -222,38 +298,72 @@ pub async fn count_documents(
     body: web::Json<QueryBody>,
 ) -> HttpResponse {
     let this_query = body.query.clone().unwrap_or_default();
-    let catalog = this_query
-        .catalog
-        .expect("catalog name required for count documents");
+    let catalog = match this_query.catalog {
+        Some(c) => c,
+        None => {
+            return HttpResponse::BadRequest().json(ApiResponse::bad_request(
+                "catalog name required for count_documents",
+            ))
+        }
+    };
     let collection = get_collection(client, &catalog, DB_NAME);
     let filter = this_query.filter.unwrap_or(doc! {});
     let doc_count = collection.count_documents(filter).await;
     match doc_count {
-        Err(e) => HttpResponse::BadRequest().body(format!("bad request, got error {:?}", e)),
-        Ok(x) => HttpResponse::Ok().json(x),
+        Err(e) => HttpResponse::BadRequest().json(ApiResponse::internal_error(&format!(
+            "Error counting documents: {:?}",
+            e
+        ))),
+        Ok(x) => HttpResponse::Ok().json(ApiResponse::ok(
+            &format!("Count of documents in collection: {}", catalog),
+            serde_json::json!(x),
+        )),
     }
 }
 
 #[get("/query/find")]
 pub async fn find(client: web::Data<Client>, body: web::Json<QueryBody>) -> HttpResponse {
     let this_query = body.query.clone().unwrap_or_default();
-    let filter = this_query.filter.expect("filter is required for find");
-    let catalog = this_query.catalog.expect("catalog is required for find");
+    let filter = match this_query.filter {
+        Some(f) => f,
+        None => {
+            return HttpResponse::BadRequest()
+                .json(ApiResponse::bad_request("filter required for find"))
+        }
+    };
+    let catalog = match this_query.catalog {
+        Some(c) => c,
+        None => {
+            return HttpResponse::BadRequest()
+                .json(ApiResponse::bad_request("catalog name required for find"))
+        }
+    };
     let find_options = build_options(
         this_query.projection,
         body.kwargs.clone().unwrap_or_default(),
     );
     let collection = get_collection(client, &catalog, DB_NAME);
-    let cursor = collection
-        .find(filter)
-        .with_options(find_options)
-        .await
-        .unwrap();
-    let docs = cursor
-        .try_collect::<Vec<mongodb::bson::Document>>()
-        .await
-        .unwrap();
-    HttpResponse::Ok().json(docs)
+    let cursor = match collection.find(filter).with_options(find_options).await {
+        Ok(c) => c,
+        Err(e) => {
+            return HttpResponse::InternalServerError().json(ApiResponse::internal_error(
+                &format!("Error finding documents: {:?}", e),
+            ));
+        }
+    };
+
+    let docs = match cursor.try_collect::<Vec<mongodb::bson::Document>>().await {
+        Ok(d) => d,
+        Err(e) => {
+            return HttpResponse::InternalServerError().json(ApiResponse::internal_error(
+                &format!("Error collecting documents: {:?}", e),
+            ));
+        }
+    };
+    HttpResponse::Ok().json(ApiResponse::ok(
+        &format!("Found document(s) in {}", catalog),
+        serde_json::json!(docs),
+    ))
 }
 
 #[get("/query/cone_search")]
@@ -261,27 +371,52 @@ pub async fn cone_search(
     client: web::Data<Client>,
     body: web::Json<ConeSearchBody>,
 ) -> HttpResponse {
-    let radius = body.radius.expect("Radius required for cone search");
-    let unit = body.unit.clone().expect("Unit required for cone search");
-    let object_coordinates = body
-        .clone()
-        .object_coordinates
-        .expect("Object coordinates required for cone_search");
-
-    let catalog_details = body
-        .catalog
-        .clone()
-        .expect("Catalog(s) required for cone_search");
-    let catalog = catalog_details
-        .catalog_name
-        .expect("catalog_name required for a catalog");
+    let this_body = body.clone();
+    let radius = match this_body.radius {
+        Some(r) => r,
+        None => {
+            return HttpResponse::BadRequest()
+                .json(ApiResponse::bad_request("radius required for cone_search"))
+        }
+    };
+    let unit = match this_body.unit {
+        Some(u) => u,
+        None => {
+            return HttpResponse::BadRequest()
+                .json(ApiResponse::bad_request("unit required for cone_search"))
+        }
+    };
+    let object_coordinates = match this_body.object_coordinates {
+        Some(o) => o,
+        None => {
+            return HttpResponse::BadRequest().json(ApiResponse::bad_request(
+                "object_coordinates required for cone_search",
+            ))
+        }
+    };
+    let catalog_details = match this_body.catalog {
+        Some(c) => c,
+        None => {
+            return HttpResponse::BadRequest().json(ApiResponse::bad_request(
+                "catalog(s) required for cone_search",
+            ))
+        }
+    };
+    let catalog = match catalog_details.catalog_name {
+        Some(c) => c,
+        None => {
+            return HttpResponse::BadRequest().json(ApiResponse::bad_request(
+                "catalog_name required for catalog_details",
+            ))
+        }
+    };
 
     let collection = get_collection(client, &catalog, DB_NAME);
 
     let projection = catalog_details.projection;
     let input_filter = catalog_details.filter.unwrap_or(doc! {});
 
-    let kwargs = body.kwargs.clone().unwrap_or_default();
+    let kwargs = this_body.kwargs.unwrap_or_default();
     let find_options = build_options(projection, kwargs);
 
     // perform cone search over each set of object coordinates
@@ -293,21 +428,31 @@ pub async fn cone_search(
             radius,
             unit.clone(),
         );
-
-        // perform cone_search on database
-        let cursor = collection
+        let cursor = match collection
             .find(filter)
             .with_options(find_options.clone())
             .await
-            .unwrap();
+        {
+            Ok(c) => c,
+            Err(e) => {
+                return HttpResponse::InternalServerError().json(ApiResponse::internal_error(
+                    &format!("Error finding documents: {:?}", e),
+                ));
+            }
+        };
         // create map entry for this object's cone search
-        docs.insert(
-            object_name,
-            cursor
-                .try_collect::<Vec<mongodb::bson::Document>>()
-                .await
-                .unwrap(),
-        );
+        let data = match cursor.try_collect::<Vec<mongodb::bson::Document>>().await {
+            Ok(d) => d,
+            Err(e) => {
+                return HttpResponse::InternalServerError().json(ApiResponse::internal_error(
+                    &format!("Error collecting documents: {:?}", e),
+                ));
+            }
+        };
+        docs.insert(object_name, data);
     }
-    HttpResponse::Ok().json(docs)
+    HttpResponse::Ok().json(ApiResponse::ok(
+        &format!("Cone Search on {} completed", catalog),
+        serde_json::json!(docs),
+    ))
 }

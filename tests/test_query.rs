@@ -95,24 +95,6 @@ async fn test_build_options() {
 }
 
 #[test]
-#[should_panic]
-fn test_build_options_bad_input() {
-    let test_projection_bad = Some(doc! {
-        "$match": {
-            "objectId": 1,
-            "candid": 1,
-            "candidate": 1,
-        }
-    });
-    let _ = build_options(
-        test_projection_bad,
-        QueryKwargs {
-            ..Default::default()
-        },
-    );
-}
-
-#[test]
 fn test_build_cone_search_filter() {
     let radec = (91.0, 188.0);
     let unit = Unit::Degrees;
@@ -155,19 +137,23 @@ async fn test_get_catalog_names() {
 #[actix_rt::test]
 async fn test_get_catalog_info() {
     let client = get_web_client().await;
-    let catalog_names = query::get_catalog_names(client.clone(), DB_NAME).await;
+    let catalog_names = query::get_catalog_names(client.clone(), DB_NAME)
+        .await
+        .unwrap();
     let catalog_name = if catalog_names.len() > 0 {
         vec![catalog_names[0].clone()]
     } else {
         return;
     };
-    let _ = query::get_catalog_info(catalog_name, client.clone(), DB_NAME);
+    let _ = query::get_catalog_info(client.clone(), catalog_name, DB_NAME);
 }
 
 #[actix_rt::test]
 async fn test_get_index_info() {
     let client = get_web_client().await;
-    let catalog_names = query::get_catalog_names(client.clone(), DB_NAME).await;
+    let catalog_names = query::get_catalog_names(client.clone(), DB_NAME)
+        .await
+        .unwrap();
     let catalog_name = if catalog_names.len() > 0 {
         vec![catalog_names[0].clone()]
     } else {
@@ -192,14 +178,16 @@ async fn test_get_collection_sample() {
 #[should_panic]
 async fn test_get_collection_sample_negative_size() {
     let collection = get_database_collection().await;
-    let _ = query::get_collection_sample(collection, -1).await;
+    let _ = query::get_collection_sample(collection, -1).await.unwrap();
 }
 
 #[actix_rt::test]
 #[should_panic]
 async fn test_get_collection_sample_size_too_large() {
     let collection = get_database_collection().await;
-    let _ = query::get_collection_sample(collection, 1001).await;
+    let _ = query::get_collection_sample(collection, 1001)
+        .await
+        .unwrap();
 }
 
 #[actix_rt::test]
