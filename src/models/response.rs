@@ -1,11 +1,14 @@
+use actix_web::HttpResponse;
+
 #[derive(serde::Serialize)]
-pub struct ApiResponse {
+pub struct ApiResponseBody {
     pub status: String,
     pub message: String,
     pub data: serde_json::Value,
 }
 
-impl ApiResponse {
+// ApiResponse constructors
+impl ApiResponseBody {
     pub fn ok(message: &str, data: serde_json::Value) -> Self {
         Self {
             status: "success".to_string(),
@@ -13,10 +16,10 @@ impl ApiResponse {
             data,
         }
     }
-    pub fn internal_error(message: &str) -> Self {
+    pub fn internal_error(error_message: &str) -> Self {
         Self {
             status: "error".to_string(),
-            message: message.to_string(),
+            message: error_message.to_string(),
             data: serde_json::Value::Null,
         }
     }
@@ -27,4 +30,17 @@ impl ApiResponse {
             data: serde_json::Value::Null,
         }
     }
+}
+
+// builds an HttpResponse with an ApiResponseBody
+pub fn ok(message: &str, data: serde_json::Value) -> HttpResponse {
+    HttpResponse::Ok().json(ApiResponseBody::ok(message, data))
+}
+
+pub fn internal_error(message: &str) -> HttpResponse {
+    HttpResponse::InternalServerError().json(ApiResponseBody::internal_error(message))
+}
+
+pub fn bad_request(message: &str) -> HttpResponse {
+    HttpResponse::BadRequest().json(ApiResponseBody::bad_request(message))
 }
