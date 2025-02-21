@@ -6,8 +6,7 @@ use mongodb::{
 };
 use std::collections::HashMap;
 
-use crate::models::query_models::*;
-use crate::models::response::ApiResponse;
+use crate::models::{query_models::*, response};
 
 const DB_NAME: &str = "boom";
 
@@ -187,8 +186,7 @@ pub async fn get_info(client: web::Data<Client>, body: web::Json<InfoQueryBody>)
     let command = match body.command.clone() {
         Some(c) => c,
         None => {
-            return HttpResponse::BadRequest()
-                .json(ApiResponse::bad_request("command required for info query"))
+            return response::bad_request("command required for info query");
         }
     };
     // get collection names in alphabetical order
@@ -196,73 +194,52 @@ pub async fn get_info(client: web::Data<Client>, body: web::Json<InfoQueryBody>)
         let data = match get_catalog_names(client, DB_NAME).await {
             Ok(d) => d,
             Err(e) => {
-                return HttpResponse::InternalServerError().json(ApiResponse::internal_error(
-                    &format!("Error getting catalog names: {:?}", e),
-                ));
+                return response::internal_error(&format!("Error getting catalog names: {:?}", e));
             }
         };
-        return HttpResponse::Ok().json(ApiResponse::ok("Catalog names", serde_json::json!(data)));
+        return response::ok("Catalog names", serde_json::json!(data));
     // get collection statistics for catalog(s)
     } else if command == "catalog_info" {
         let catalogs = match body.catalogs.clone() {
             Some(c) => c,
             None => {
-                return HttpResponse::BadRequest().json(ApiResponse::bad_request(
-                    "catalog(s) required for catalog_info",
-                ))
+                return response::bad_request("catalog(s) required for catalog_info");
             }
         };
         let data = match get_catalog_info(client, catalogs.clone(), DB_NAME).await {
             Ok(d) => d,
             Err(e) => {
-                return HttpResponse::InternalServerError().json(ApiResponse::internal_error(
-                    &format!("Error getting catalog info: {:?}", e),
-                ));
+                return response::internal_error(&format!("Error getting catalog info: {:?}", e));
             }
         };
-        return HttpResponse::Ok().json(ApiResponse::ok(
-            &format!("Catalog info for {:?}", catalogs),
-            serde_json::json!(data),
-        ));
+        return response::ok(&format!("Catalog info for {:?}", catalogs), serde_json::json!(data));
     // get list of indexes on the collection
     } else if command == "index_info" {
         let catalogs = match body.catalogs.clone() {
             Some(c) => c,
             None => {
-                return HttpResponse::BadRequest().json(ApiResponse::bad_request(
-                    "catalog(s) required for index_info",
-                ))
+                return response::bad_request("catalog(s) required for index_info");
             }
         };
         let data = get_index_info(client, catalogs.clone(), DB_NAME).await;
         match data {
             Ok(d) => {
-                return HttpResponse::Ok().json(ApiResponse::ok(
-                    &format!("Index info for {:?}", catalogs),
-                    serde_json::json!(d),
-                ));
+                return response::ok(&format!("Index info for {:?}", catalogs), serde_json::json!(d));
             }
             Err(e) => {
-                return HttpResponse::InternalServerError().json(ApiResponse::internal_error(
-                    &format!("Error getting index info: {:?}", e),
-                ));
+                return response::internal_error(&format!("Error getting index info: {:?}", e));
             }
         }
     } else if command == "db_info" {
         let data = match get_db_info(client, DB_NAME).await {
             Ok(d) => d,
             Err(e) => {
-                return HttpResponse::InternalServerError().json(ApiResponse::internal_error(
-                    &format!("Error getting database info: {:?}", e),
-                ));
+                return response::internal_error(&format!("Error getting database info: {:?}", e));
             }
         };
-        return HttpResponse::Ok().json(ApiResponse::ok("Database info", serde_json::json!(data)));
+        return response::ok("Database info", serde_json::json!(data));
     } else {
-        return HttpResponse::BadRequest().json(ApiResponse::bad_request(&format!(
-            "Unknown command: {}",
-            command
-        )));
+        return response::bad_request(&format!("Unknown command: {}", command));
     }
 }
 
@@ -272,8 +249,7 @@ pub async fn sample(client: web::Data<Client>, body: web::Json<QueryBody>) -> Ht
     let catalog = match this_query.catalog {
         Some(c) => c,
         None => {
-            return HttpResponse::BadRequest()
-                .json(ApiResponse::bad_request("catalog name required for sample"))
+            return response::bad_request("catalog name required for sample")
         }
     };
     let collection: Collection<Document> = get_collection(client, &catalog, DB_NAME);
@@ -281,15 +257,10 @@ pub async fn sample(client: web::Data<Client>, body: web::Json<QueryBody>) -> Ht
     let docs = match get_collection_sample(collection, size).await {
         Ok(d) => d,
         Err(e) => {
-            return HttpResponse::InternalServerError().json(ApiResponse::internal_error(
-                &format!("Error getting sample: {:?}", e),
-            ));
+            return response::internal_error(&format!("Error getting sample: {:?}", e));
         }
     };
-    HttpResponse::Ok().json(ApiResponse::ok(
-        &format!("Sample of collection: {}", catalog),
-        serde_json::json!(docs),
-    ))
+    return response::ok(&format!("Sample of collection: {}", catalog), serde_json::json!(docs))
 }
 
 #[get("/query/count_documents")]
@@ -301,23 +272,19 @@ pub async fn count_documents(
     let catalog = match this_query.catalog {
         Some(c) => c,
         None => {
-            return HttpResponse::BadRequest().json(ApiResponse::bad_request(
-                "catalog name required for count_documents",
-            ))
+            return response::bad_request("catalog name required for count_documents")
         }
     };
     let collection = get_collection(client, &catalog, DB_NAME);
     let filter = this_query.filter.unwrap_or(doc! {});
     let doc_count = collection.count_documents(filter).await;
     match doc_count {
-        Err(e) => HttpResponse::BadRequest().json(ApiResponse::internal_error(&format!(
-            "Error counting documents: {:?}",
-            e
-        ))),
-        Ok(x) => HttpResponse::Ok().json(ApiResponse::ok(
-            &format!("Count of documents in collection: {}", catalog),
-            serde_json::json!(x),
-        )),
+        Err(e) => {
+            return response::internal_error(&format!("Error counting documents: {:?}", e));
+        },
+        Ok(x) => {
+            return response::ok(&format!("Count of documents in collection: {}", catalog), serde_json::json!(x));
+        },
     }
 }
 
@@ -327,15 +294,13 @@ pub async fn find(client: web::Data<Client>, body: web::Json<QueryBody>) -> Http
     let filter = match this_query.filter {
         Some(f) => f,
         None => {
-            return HttpResponse::BadRequest()
-                .json(ApiResponse::bad_request("filter required for find"))
+            return response::bad_request("filter required for find");
         }
     };
     let catalog = match this_query.catalog {
         Some(c) => c,
         None => {
-            return HttpResponse::BadRequest()
-                .json(ApiResponse::bad_request("catalog name required for find"))
+            return response::bad_request("catalog name required for find");
         }
     };
     let find_options = build_options(
@@ -346,24 +311,17 @@ pub async fn find(client: web::Data<Client>, body: web::Json<QueryBody>) -> Http
     let cursor = match collection.find(filter).with_options(find_options).await {
         Ok(c) => c,
         Err(e) => {
-            return HttpResponse::InternalServerError().json(ApiResponse::internal_error(
-                &format!("Error finding documents: {:?}", e),
-            ));
+            return response::internal_error(&format!("Error finding documents: {:?}", e));
         }
     };
 
     let docs = match cursor.try_collect::<Vec<mongodb::bson::Document>>().await {
         Ok(d) => d,
         Err(e) => {
-            return HttpResponse::InternalServerError().json(ApiResponse::internal_error(
-                &format!("Error collecting documents: {:?}", e),
-            ));
+            return response::internal_error(&format!("Error collecting documents: {:?}", e));
         }
     };
-    HttpResponse::Ok().json(ApiResponse::ok(
-        &format!("Found document(s) in {}", catalog),
-        serde_json::json!(docs),
-    ))
+    return response::ok(&format!("Found document(s) in {}", catalog), serde_json::json!(docs));
 }
 
 #[get("/query/cone_search")]
@@ -375,39 +333,31 @@ pub async fn cone_search(
     let radius = match this_body.radius {
         Some(r) => r,
         None => {
-            return HttpResponse::BadRequest()
-                .json(ApiResponse::bad_request("radius required for cone_search"))
+            return response::bad_request("radius required for cone_search")
         }
     };
     let unit = match this_body.unit {
         Some(u) => u,
         None => {
-            return HttpResponse::BadRequest()
-                .json(ApiResponse::bad_request("unit required for cone_search"))
+            return response::bad_request("unit required for cone_search")
         }
     };
     let object_coordinates = match this_body.object_coordinates {
         Some(o) => o,
         None => {
-            return HttpResponse::BadRequest().json(ApiResponse::bad_request(
-                "object_coordinates required for cone_search",
-            ))
+            return response::bad_request("object_coordinates required for cone_search");
         }
     };
     let catalog_details = match this_body.catalog {
         Some(c) => c,
         None => {
-            return HttpResponse::BadRequest().json(ApiResponse::bad_request(
-                "catalog(s) required for cone_search",
-            ))
+            return response::bad_request("catalog(s) required for cone_search");
         }
     };
     let catalog = match catalog_details.catalog_name {
         Some(c) => c,
         None => {
-            return HttpResponse::BadRequest().json(ApiResponse::bad_request(
-                "catalog_name required for catalog_details",
-            ))
+            return response::bad_request("catalog_name required for catalog_details");
         }
     };
 
@@ -435,24 +385,17 @@ pub async fn cone_search(
         {
             Ok(c) => c,
             Err(e) => {
-                return HttpResponse::InternalServerError().json(ApiResponse::internal_error(
-                    &format!("Error finding documents: {:?}", e),
-                ));
+                return response::internal_error(&format!("Error finding documents: {:?}", e));
             }
         };
         // create map entry for this object's cone search
         let data = match cursor.try_collect::<Vec<mongodb::bson::Document>>().await {
             Ok(d) => d,
             Err(e) => {
-                return HttpResponse::InternalServerError().json(ApiResponse::internal_error(
-                    &format!("Error collecting documents: {:?}", e),
-                ));
+                return response::internal_error(&format!("Error collecting documents: {:?}", e));
             }
         };
         docs.insert(object_name, data);
     }
-    HttpResponse::Ok().json(ApiResponse::ok(
-        &format!("Cone Search on {} completed", catalog),
-        serde_json::json!(docs),
-    ))
+    return response::ok(&format!("Cone Search on {} completed", catalog), serde_json::json!(docs));
 }
