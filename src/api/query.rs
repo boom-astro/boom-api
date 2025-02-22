@@ -6,21 +6,9 @@ use mongodb::{
 };
 use std::collections::HashMap;
 
-use crate::models::{query_models::*, response};
+use crate::{api::util, models::{query_models::*, response}};
 
 const DB_NAME: &str = "boom";
-
-// retrieves a mongodb collection
-// TODO: add check here for valid catalog names
-fn get_collection(
-    client: web::Data<Client>,
-    catalog_name: &str,
-    db_name: &str,
-) -> Collection<Document> {
-    let collection: Collection<mongodb::bson::Document> =
-        client.database(db_name).collection(catalog_name);
-    collection
-}
 
 // builds find options for mongo query
 pub fn build_options(
@@ -120,7 +108,7 @@ pub async fn get_index_info(
 ) -> Result<Vec<Vec<IndexModel>>, mongodb::error::Error> {
     let mut out_data = Vec::new();
     for i in 0..catalogs.len() {
-        let collection = get_collection(client.clone(), &catalogs[i], db_name);
+        let collection = util::get_collection(client.clone(), &catalogs[i], db_name);
         let cursor = match collection.list_indexes().await {
             Ok(c) => c,
             Err(e) => return Err(e),
@@ -252,7 +240,7 @@ pub async fn sample(client: web::Data<Client>, body: web::Json<QueryBody>) -> Ht
             return response::bad_request("catalog name required for sample")
         }
     };
-    let collection: Collection<Document> = get_collection(client, &catalog, DB_NAME);
+    let collection: Collection<Document> = util::get_collection(client, &catalog, DB_NAME);
     let size = this_query.size.unwrap_or(1);
     let docs = match get_collection_sample(collection, size).await {
         Ok(d) => d,
@@ -275,7 +263,7 @@ pub async fn count_documents(
             return response::bad_request("catalog name required for count_documents")
         }
     };
-    let collection = get_collection(client, &catalog, DB_NAME);
+    let collection = util::get_collection(client, &catalog, DB_NAME);
     let filter = this_query.filter.unwrap_or(doc! {});
     let doc_count = collection.count_documents(filter).await;
     match doc_count {
@@ -307,7 +295,7 @@ pub async fn find(client: web::Data<Client>, body: web::Json<QueryBody>) -> Http
         this_query.projection,
         body.kwargs.clone().unwrap_or_default(),
     );
-    let collection = get_collection(client, &catalog, DB_NAME);
+    let collection = util::get_collection(client, &catalog, DB_NAME);
     let cursor = match collection.find(filter).with_options(find_options).await {
         Ok(c) => c,
         Err(e) => {
@@ -361,7 +349,7 @@ pub async fn cone_search(
         }
     };
 
-    let collection = get_collection(client, &catalog, DB_NAME);
+    let collection = util::get_collection(client, &catalog, DB_NAME);
 
     let projection = catalog_details.projection;
     let input_filter = catalog_details.filter.unwrap_or(doc! {});
