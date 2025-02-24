@@ -1,8 +1,8 @@
-use crate::{models::{alert_models, response}, api::util};
+use crate::{models::response, api::util};
 use actix_web::{get, web, HttpResponse};
 use futures::TryStreamExt;
 use mongodb::{
-    bson::{doc, Document}, results::SummaryBulkWriteResult, Client, Collection
+    bson::{doc, Document}, Client, Collection
 };
 
 const DB_NAME: &str = "boom";
