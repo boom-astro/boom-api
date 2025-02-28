@@ -1,22 +1,9 @@
 use crate::{models::response, api::util};
 use actix_web::{get, web, HttpResponse};
 use futures::TryStreamExt;
-use mongodb::{
-    bson::{doc, Document}, Client, Collection
-};
+use mongodb::{bson::doc, Client};
 
 const DB_NAME: &str = "boom";
-
-// TODO: check notion
-/*
-1. get the most recent detection for the object
-    sort alerts by jd in ascending order
-2. get the image information for that detection
-    get the cutoutScience, cutoutTemplate, and cutoutDifference fields
-3. get metadata for that detection
-    ...
-4. get the crossmatches and prv_candidates for that object from the aux table
-*/
 
 #[get("/alerts/{survey_name}/get_object/{object_id}")]
 pub async fn get_object(
@@ -24,20 +11,17 @@ pub async fn get_object(
     path: web::Path<(String, String)>,
 ) -> HttpResponse {
     let (survey_name, object_id) = path.into_inner();
-    let survey_name = survey_name.to_uppercase(); // TEMP to match with "ZTF"
-
-    let alerts_collection: Collection<mongodb::bson::Document> = client
-        .database(DB_NAME)
-        .collection(&format!("{}_alerts", survey_name));
-
-    let aux_collection: Collection<Document> = client
-        .database(DB_NAME)
-        .collection(&format!("{}_alerts_aux", survey_name));
-    
+    let survey_name = survey_name.to_uppercase(); // (TEMP) to match with "ZTF"
+    let alerts_collection = util::get_collection(
+        client.clone(), &format!("{}_alerts", survey_name), DB_NAME
+    );
+    let aux_collection = util::get_collection(
+        client.clone(), &format!("{}_alerts_aux", survey_name), DB_NAME
+    );
     // find options for getting most recent alert from alerts collection
     let find_options_recent = mongodb::options::FindOptions::builder()
         .sort(doc! {
-            "candidate.jd": 1,
+            "candidate.jd": -1,
         })
         .projection(doc! {
             "_id": 1,
@@ -46,6 +30,7 @@ pub async fn get_object(
             "cutoutTemplate": 1,
             "cutoutDifference": 1,
         })
+        .limit(1)
         .build();
 
     // get the most recent alert for the object
@@ -100,15 +85,15 @@ pub async fn get_object(
             }
         };
 
-    let mut data = doc!{};
+    let mut candidate = doc!{};
     // organize response
-    data.insert("objectId", object_id.clone());
-    data.insert("alert metadata", newest_alert.get_document("candidate").unwrap());
-    data.insert("cutoutScience", newest_alert.get_document("cutoutScience").unwrap());
-    data.insert("cutoutTemplate", newest_alert.get_document("cutoutTemplate").unwrap());
-    data.insert("cutoutDifference", newest_alert.get_document("cutoutDifference").unwrap());
-    data.insert("prv_candidates", aux_entry.get_array("prv_candidates").unwrap());
-    data.insert("cross_matches", aux_entry.get_document("cross_matches").unwrap());
+    candidate.insert("objectId", object_id.clone());
+    candidate.insert("alert_metadata", newest_alert.get_document("candidate").unwrap());
+    candidate.insert("cutoutScience", newest_alert.get_document("cutoutScience").unwrap());
+    candidate.insert("cutoutTemplate", newest_alert.get_document("cutoutTemplate").unwrap());
+    candidate.insert("cutoutDifference", newest_alert.get_document("cutoutDifference").unwrap());
+    candidate.insert("prv_candidates", aux_entry.get_array("prv_candidates").unwrap());
+    candidate.insert("cross_matches", aux_entry.get_document("cross_matches").unwrap());
     
-    return response::ok(&format!("object found with object_id: {}", object_id), serde_json::json!(data));
+    return response::ok(&format!("object found with object_id: {}", object_id), serde_json::json!(candidate));
 }
