@@ -1,5 +1,5 @@
 use crate::models::filter_models::*;
-use actix_web::{post, patch, web, HttpResponse};
+use actix_web::{patch, post, web, HttpResponse};
 use mongodb::{
     bson::{doc, Document},
     Client, Collection,
@@ -19,11 +19,12 @@ struct Filter {
 // checks if a filter with the given id already exists in the database
 async fn check_filter_exists(
     client: web::Data<Client>,
-    filter_id: i32
+    filter_id: i32,
 ) -> Result<bool, mongodb::error::Error> {
     let filter_collection = util::get_filter_collection(client, DB_NAME);
     let result = filter_collection
-        .count_documents(doc!{ "filter_id": filter_id }).await;
+        .count_documents(doc! { "filter_id": filter_id })
+        .await;
     match result {
         Ok(count) => {
             return Ok(count > 0);
@@ -206,8 +207,10 @@ pub async fn post_filter(
     match test_run_filter(client.clone(), catalog.clone(), filter).await {
         Ok(()) => {}
         Err(e) => {
-            return HttpResponse::BadRequest().body(
-                format!("Invalid filter submitted, filter test failed with error: {}", e));
+            return HttpResponse::BadRequest().body(format!(
+                "Invalid filter submitted, filter test failed with error: {}",
+                e
+            ));
         }
     }
 
@@ -223,7 +226,8 @@ pub async fn post_filter(
     let filter_bson = match build_filter_bson(database_filter) {
         Ok(bson) => bson,
         Err(e) => {
-            return HttpResponse::BadRequest().body(format!("unable to create filter bson, got error: {}", e));
+            return HttpResponse::BadRequest()
+                .body(format!("unable to create filter bson, got error: {}", e));
         }
     };
     match filter_collection.insert_one(filter_bson).await {
@@ -232,10 +236,9 @@ pub async fn post_filter(
         }
         Err(e) => {
             return HttpResponse::BadRequest().body(format!(
-                "failed to insert filter into database. error: {}", 
+                "failed to insert filter into database. error: {}",
                 e
             ));
         }
     }
 }
-

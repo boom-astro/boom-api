@@ -6,7 +6,10 @@ use mongodb::{
 };
 use std::collections::HashMap;
 
-use crate::{api::util, models::{query_models::*, response}};
+use crate::{
+    api::util,
+    models::{query_models::*, response},
+};
 
 const DB_NAME: &str = "boom";
 
@@ -200,7 +203,10 @@ pub async fn get_info(client: web::Data<Client>, body: web::Json<InfoQueryBody>)
                 return response::internal_error(&format!("Error getting catalog info: {:?}", e));
             }
         };
-        return response::ok(&format!("Catalog info for {:?}", catalogs), serde_json::json!(data));
+        return response::ok(
+            &format!("Catalog info for {:?}", catalogs),
+            serde_json::json!(data),
+        );
     // get list of indexes on the collection
     } else if command == "index_info" {
         let catalogs = match body.catalogs.clone() {
@@ -212,7 +218,10 @@ pub async fn get_info(client: web::Data<Client>, body: web::Json<InfoQueryBody>)
         let data = get_index_info(client, catalogs.clone(), DB_NAME).await;
         match data {
             Ok(d) => {
-                return response::ok(&format!("Index info for {:?}", catalogs), serde_json::json!(d));
+                return response::ok(
+                    &format!("Index info for {:?}", catalogs),
+                    serde_json::json!(d),
+                );
             }
             Err(e) => {
                 return response::internal_error(&format!("Error getting index info: {:?}", e));
@@ -236,9 +245,7 @@ pub async fn sample(client: web::Data<Client>, body: web::Json<QueryBody>) -> Ht
     let this_query = body.query.clone().unwrap_or_default();
     let catalog = match this_query.catalog {
         Some(c) => c,
-        None => {
-            return response::bad_request("catalog name required for sample")
-        }
+        None => return response::bad_request("catalog name required for sample"),
     };
     let collection: Collection<Document> = util::get_collection(client, &catalog, DB_NAME);
     let size = this_query.size.unwrap_or(1);
@@ -248,7 +255,10 @@ pub async fn sample(client: web::Data<Client>, body: web::Json<QueryBody>) -> Ht
             return response::internal_error(&format!("Error getting sample: {:?}", e));
         }
     };
-    return response::ok(&format!("Sample of collection: {}", catalog), serde_json::json!(docs))
+    return response::ok(
+        &format!("Sample of collection: {}", catalog),
+        serde_json::json!(docs),
+    );
 }
 
 #[get("/query/count_documents")]
@@ -259,9 +269,7 @@ pub async fn count_documents(
     let this_query = body.query.clone().unwrap_or_default();
     let catalog = match this_query.catalog {
         Some(c) => c,
-        None => {
-            return response::bad_request("catalog name required for count_documents")
-        }
+        None => return response::bad_request("catalog name required for count_documents"),
     };
     let collection = util::get_collection(client, &catalog, DB_NAME);
     let filter = this_query.filter.unwrap_or(doc! {});
@@ -269,10 +277,13 @@ pub async fn count_documents(
     match doc_count {
         Err(e) => {
             return response::internal_error(&format!("Error counting documents: {:?}", e));
-        },
+        }
         Ok(x) => {
-            return response::ok(&format!("Count of documents in collection: {}", catalog), serde_json::json!(x));
-        },
+            return response::ok(
+                &format!("Count of documents in collection: {}", catalog),
+                serde_json::json!(x),
+            );
+        }
     }
 }
 
@@ -309,7 +320,10 @@ pub async fn find(client: web::Data<Client>, body: web::Json<QueryBody>) -> Http
             return response::internal_error(&format!("Error collecting documents: {:?}", e));
         }
     };
-    return response::ok(&format!("Found document(s) in {}", catalog), serde_json::json!(docs));
+    return response::ok(
+        &format!("Found document(s) in {}", catalog),
+        serde_json::json!(docs),
+    );
 }
 
 #[get("/query/cone_search")]
@@ -320,15 +334,11 @@ pub async fn cone_search(
     let this_body = body.clone();
     let radius = match this_body.radius {
         Some(r) => r,
-        None => {
-            return response::bad_request("radius required for cone_search")
-        }
+        None => return response::bad_request("radius required for cone_search"),
     };
     let unit = match this_body.unit {
         Some(u) => u,
-        None => {
-            return response::bad_request("unit required for cone_search")
-        }
+        None => return response::bad_request("unit required for cone_search"),
     };
     let object_coordinates = match this_body.object_coordinates {
         Some(o) => o,
@@ -385,5 +395,8 @@ pub async fn cone_search(
         };
         docs.insert(object_name, data);
     }
-    return response::ok(&format!("Cone Search on {} completed", catalog), serde_json::json!(docs));
+    return response::ok(
+        &format!("Cone Search on {} completed", catalog),
+        serde_json::json!(docs),
+    );
 }
