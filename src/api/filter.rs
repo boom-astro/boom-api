@@ -1,9 +1,11 @@
 use crate::models::filter_models::*;
-use actix_web::{post, web, HttpResponse};
+use actix_web::{post, patch, web, HttpResponse};
 use mongodb::{
     bson::{doc, Document},
     Client, Collection,
 };
+
+use super::util;
 
 const DB_NAME: &str = "boom";
 
@@ -12,6 +14,24 @@ struct Filter {
     pub permissions: Vec<i64>,
     pub catalog: String,
     pub id: i32,
+}
+
+// checks if a filter with the given id already exists in the database
+async fn check_filter_exists(
+    client: web::Data<Client>,
+    filter_id: i32
+) -> Result<bool, mongodb::error::Error> {
+    let filter_collection = util::get_filter_collection(client, DB_NAME);
+    let result = filter_collection
+        .count_documents(doc!{ "filter_id": filter_id }).await;
+    match result {
+        Ok(count) => {
+            return Ok(count > 0);
+        }
+        Err(e) => {
+            return Err(e);
+        }
+    }
 }
 
 // prepends necessary portions to filter to run in database
@@ -98,7 +118,7 @@ fn build_test_filter(
 }
 
 // tests the functionality of a filter by running it on alerts in database
-async fn test_filter(
+async fn test_run_filter(
     client: web::Data<Client>,
     catalog: String,
     filter: Filter,
@@ -118,12 +138,11 @@ async fn test_filter(
     }
 }
 
-// takes tested filter and builds the properly formatted bson document for the database
+// takes a verified filter and builds the properly formatted bson document for the database
 fn build_filter_bson(filter: Filter) -> Result<mongodb::bson::Document, mongodb::error::Error> {
     // generate new object id
     let id = mongodb::bson::oid::ObjectId::new();
     let date_time = mongodb::bson::DateTime::now();
-    // TODO: how to manage multiple filters in each FILTER within the database
     let database_filter_bson = doc! {
         "_id": id,
         "group_id": 41, // consistent with other test filters
@@ -133,7 +152,7 @@ fn build_filter_bson(filter: Filter) -> Result<mongodb::bson::Document, mongodb:
         "active": true,
         "active_fid": filter.id,
         "fv": [
-            // TODO: how to generate pipeline id's?
+            // TODO: how to generate filter id's? ---> generate a random string (in future, hash pipeline)
             {
                 "fid": "some_pipeline_id",
                 "pipeline": filter.pipeline,
@@ -148,33 +167,47 @@ fn build_filter_bson(filter: Filter) -> Result<mongodb::bson::Document, mongodb:
     Ok(database_filter_bson)
 }
 
-// TODO: (filter id creation process)
-//      idea: the filter id creation process will be done by the programmer on the front end(?)
-//      idea: use authentication to help attribute the filter being added to the user adding it
-//            allows user to submit a filter to the database
 #[post("/filter")]
 pub async fn post_filter(
     client: web::Data<Client>,
     body: web::Json<FilterSubmissionBody>,
 ) -> HttpResponse {
     let body = body.clone();
-    // 1. grab user filter
-    let catalog = body.catalog.expect("catalog required");
-    let id = body.id.expect("filter id required");
-    let permissions = body.permissions.expect("filter permissions required");
-    let pipeline = body.pipeline.expect("filter pipeline required");
+    // grab user filter
+    let catalog = match body.catalog {
+        Some(catalog) => catalog,
+        None => {
+            return HttpResponse::BadRequest().body("catalog not provided");
+        }
+    };
+    let id = match body.id {
+        Some(id) => id,
+        None => {
+            return HttpResponse::BadRequest().body("filter id not provided");
+        }
+    };
+    let permissions = match body.permissions {
+        Some(permissions) => permissions,
+        None => {
+            return HttpResponse::BadRequest().body("permissions not provided");
+        }
+    };
+    let pipeline = match body.pipeline {
+        Some(pipeline) => pipeline,
+        None => {
+            return HttpResponse::BadRequest().body("pipeline not provided");
+        }
+    };
 
-    // Test filter
-
-    // 1. create production version of filter
+    // Test filter received from user
+    // create production version of filter
     let filter = build_test_filter(catalog.clone(), id, permissions.clone(), pipeline.clone());
-
-    // 2. perform test run to ensure no errors
-    match test_filter(client.clone(), catalog.clone(), filter).await {
+    // perform test run to ensure no errors
+    match test_run_filter(client.clone(), catalog.clone(), filter).await {
         Ok(()) => {}
         Err(e) => {
-            println!("could not submit filter to database, got error: {}", e);
-            return HttpResponse::BadRequest().body(format!("Invalid filter submitted"));
+            return HttpResponse::BadRequest().body(
+                format!("Invalid filter submitted, filter test failed with error: {}", e));
         }
     }
 
@@ -182,16 +215,15 @@ pub async fn post_filter(
     let filter_collection: Collection<mongodb::bson::Document> =
         client.database(DB_NAME).collection("filters");
     let database_filter = Filter {
-        pipeline: pipeline,
-        permissions: permissions,
-        catalog: catalog,
-        id: id,
+        pipeline,
+        permissions,
+        catalog,
+        id,
     };
     let filter_bson = match build_filter_bson(database_filter) {
         Ok(bson) => bson,
         Err(e) => {
-            println!("unable to create filter bson, got error {}", e);
-            return HttpResponse::BadRequest().body("unable to create filter bson");
+            return HttpResponse::BadRequest().body(format!("unable to create filter bson, got error: {}", e));
         }
     };
     match filter_collection.insert_one(filter_bson).await {
@@ -200,9 +232,10 @@ pub async fn post_filter(
         }
         Err(e) => {
             return HttpResponse::BadRequest().body(format!(
-                "failed to insert filter into database. error: {}",
+                "failed to insert filter into database. error: {}", 
                 e
             ));
         }
     }
 }
+
