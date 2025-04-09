@@ -5,10 +5,10 @@ development environment requirements:
 
 # Api Documentation
 
-# Filtering
+# Filtering (W.I.P.)
 
-## submit filter (W.I.P.)
-**Endpoint**: `POST "/filter`\
+## Submit a new filter
+**Endpoint**: `POST "/filter"`\
 **Body**:
 ```
 {
@@ -16,7 +16,6 @@ development environment requirements:
     "catalog": catalog name (string),
     "permissions": allowed permissions,
     "id": filter id (i32)
-
 }
 ```
 
@@ -80,6 +79,15 @@ development environment requirements:
     "catalog": "ZTF",
     "permissions": [1],
     "id": -3
+}
+```
+
+## Add new pipeline version to existing filter
+**Endpoint**: `PATCH "/filter/filter_id"`\
+**Body**:
+```
+{
+    "pipeline": aggregate pipeline (array of bson documents)
 }
 ```
 

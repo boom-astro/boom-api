@@ -1,5 +1,6 @@
+use std::vec;
 use crate::models::filter_models::*;
-use actix_web::{patch, post, web, HttpResponse};
+use actix_web::{post, patch, web, HttpResponse};
 use mongodb::{
     bson::{doc, Document},
     Client, Collection,
@@ -19,12 +20,11 @@ struct Filter {
 // checks if a filter with the given id already exists in the database
 async fn check_filter_exists(
     client: web::Data<Client>,
-    filter_id: i32,
+    filter_id: i32
 ) -> Result<bool, mongodb::error::Error> {
     let filter_collection = util::get_filter_collection(client, DB_NAME);
     let result = filter_collection
-        .count_documents(doc! { "filter_id": filter_id })
-        .await;
+        .count_documents(doc!{ "filter_id": filter_id }).await;
     match result {
         Ok(count) => {
             return Ok(count > 0);
@@ -33,6 +33,81 @@ async fn check_filter_exists(
             return Err(e);
         }
     }
+}
+
+fn build_test_pipeline(
+    filter_catalog: String,
+    filter_perms: Vec<i32>,
+    mut filter_pipeline: Vec<Document>
+) -> Vec<Document> {
+    let mut out_pipeline = vec![
+        doc! {
+            "$project": doc! {
+                "cutoutScience": 0,
+                "cutoutDifference": 0,
+                "cutoutTemplate": 0,
+                "publisher": 0,
+                "schemavsn": 0
+            }
+        },
+        doc! {
+            "$lookup": doc! {
+                "from": format!("{}_aux", filter_catalog),
+                "localField": "objectId",
+                "foreignField": "_id",
+                "as": "aux"
+            }
+        },
+        doc! {
+            "$project": doc! {
+                "objectId": 1,
+                "candid": 1,
+                "candidate": 1,
+                "classifications": 1,
+                "coordinates": 1,
+                "cross_matches": doc! {
+                    "$arrayElemAt": [
+                        "$aux.cross_matches",
+                        0
+                    ]
+                },
+                "prv_candidates": doc! {
+                    "$filter": doc! {
+                        "input": doc! {
+                            "$arrayElemAt": [
+                                "$aux.prv_candidates",
+                                0
+                            ]
+                        },
+                        "as": "x",
+                        "cond": doc! {
+                            "$and": [
+                                {
+                                    "$in": [
+                                        "$$x.programid",
+                                        &filter_perms
+                                    ]
+                                },
+                                {
+                                    "$lt": [
+                                        {
+                                            "$subtract": [
+                                                "$candidate.jd",
+                                                "$$x.jd"
+                                            ]
+                                        },
+                                        365
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                },
+            }
+        },
+    ];
+    out_pipeline.append(&mut filter_pipeline);
+    return out_pipeline;
 }
 
 // prepends necessary portions to filter to run in database
@@ -119,16 +194,16 @@ fn build_test_filter(
 }
 
 // tests the functionality of a filter by running it on alerts in database
-async fn test_run_filter(
+async fn run_test_pipeline(
     client: web::Data<Client>,
     catalog: String,
-    filter: Filter,
+    pipeline: Vec<mongodb::bson::Document>,
 ) -> Result<(), mongodb::error::Error> {
     let collection: Collection<mongodb::bson::Document> = client
         .database(DB_NAME)
         .collection(format!("{}_alerts", catalog).as_str());
 
-    let result = collection.aggregate(filter.pipeline).await;
+    let result = collection.aggregate(pipeline).await;
     match result {
         Ok(_) => {
             return Ok(());
@@ -153,7 +228,7 @@ fn build_filter_bson(filter: Filter) -> Result<mongodb::bson::Document, mongodb:
         "active": true,
         "active_fid": filter.id,
         "fv": [
-            // TODO: how to generate filter id's? ---> generate a random string (in future, hash pipeline)
+            // TODO: generate pipeline id
             {
                 "fid": "some_pipeline_id",
                 "pipeline": filter.pipeline,
@@ -166,6 +241,60 @@ fn build_filter_bson(filter: Filter) -> Result<mongodb::bson::Document, mongodb:
         "last_modified": date_time,
     };
     Ok(database_filter_bson)
+}
+
+#[patch("/filter/{filter_id}")]
+pub async fn add_filter_version(
+    client: web::Data<Client>,
+    filter_id: web::Path<i32>,
+    body: web::Json<FilterSubmissionBody>,
+) -> HttpResponse {
+    let filter_id = filter_id.into_inner();
+    let pipeline = match body.clone().pipeline {
+        Some(pipeline) => pipeline,
+        None => {
+            return HttpResponse::BadRequest().body(
+                "pipeline not provided. pipeline required for adding a filter version"
+            );
+        }
+    };
+    println!("got filter version request for filter id: {}", filter_id);
+    let collection = util::get_filter_collection(client.clone(), DB_NAME);
+    let owner_filter = match collection.find_one(doc! {"filter_id": filter_id}).await {
+        Ok(Some(filter)) => filter,
+        Ok(None) => { 
+            return HttpResponse::BadRequest().body(
+                format!("filter with id {} does not exist", filter_id)
+            );
+        }
+        Err(e) => {
+            return HttpResponse::InternalServerError().body(
+                format!("failed to find filter with id {}. error: {}", filter_id, e)
+            );
+        }
+    };
+    println!("found owning filter {} in database, testing new pipeline", filter_id);
+    let catalog = owner_filter.get_str("catalog").unwrap();
+    let permissions = owner_filter.get_array("permissions").unwrap();
+    let permissions: Vec<i32> = permissions
+        .iter()
+        .map(|perm| perm.as_i32().unwrap())
+        .collect();
+    // create test version of filter and test it
+    let test_pipeline = build_test_pipeline(catalog.to_string(), permissions, pipeline.clone());
+    println!("built new testing pipeline, testing it");
+    match run_test_pipeline(client.clone(), catalog.to_string(), test_pipeline).await {
+        Ok(()) => {}
+        Err(e) => {
+            return HttpResponse::BadRequest().body(
+                format!("Invalid filter submitted, filter test failed with error: {}", e));
+        }
+    }
+    println!("successfully tested new pipeline. submitting to database");
+    // TODO: create production version of pipeline and add it to the owning filter's fv array
+    
+
+    return HttpResponse::Ok().body(format!("filter id: {}", filter_id));
 }
 
 #[post("/filter")]
@@ -204,13 +333,11 @@ pub async fn post_filter(
     // create production version of filter
     let filter = build_test_filter(catalog.clone(), id, permissions.clone(), pipeline.clone());
     // perform test run to ensure no errors
-    match test_run_filter(client.clone(), catalog.clone(), filter).await {
+    match run_test_pipeline(client.clone(), catalog.clone(), filter.pipeline).await {
         Ok(()) => {}
         Err(e) => {
-            return HttpResponse::BadRequest().body(format!(
-                "Invalid filter submitted, filter test failed with error: {}",
-                e
-            ));
+            return HttpResponse::BadRequest().body(
+                format!("Invalid filter submitted, filter test failed with error: {}", e));
         }
     }
 
@@ -226,8 +353,7 @@ pub async fn post_filter(
     let filter_bson = match build_filter_bson(database_filter) {
         Ok(bson) => bson,
         Err(e) => {
-            return HttpResponse::BadRequest()
-                .body(format!("unable to create filter bson, got error: {}", e));
+            return HttpResponse::BadRequest().body(format!("unable to create filter bson, got error: {}", e));
         }
     };
     match filter_collection.insert_one(filter_bson).await {
@@ -236,9 +362,10 @@ pub async fn post_filter(
         }
         Err(e) => {
             return HttpResponse::BadRequest().body(format!(
-                "failed to insert filter into database. error: {}",
+                "failed to insert filter into database. error: {}", 
                 e
             ));
         }
     }
 }
+
