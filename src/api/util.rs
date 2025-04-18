@@ -1,5 +1,5 @@
-use mongodb::{bson::Document, Client, Collection};
 use actix_web::web;
+use mongodb::{bson::Document, Client, Collection};
 
 // TODO: add check for valid catalogs
 // retrieves a mongodb collection

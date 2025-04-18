@@ -1,24 +1,43 @@
-use crate::{models::response, api::util};
+use crate::models::response;
 use actix_web::{get, web, HttpResponse};
 use futures::TryStreamExt;
 use mongodb::{
-    bson::{doc, Document}, Client, Collection
+    bson::{doc, Document},
+    Client, Collection,
 };
 
 const DB_NAME: &str = "boom";
 
-// TODO: check notion
-/*
-1. get the most recent detection for the object
-    sort alerts by jd in ascending order
-2. get the image information for that detection
-    get the cutoutScience, cutoutTemplate, and cutoutDifference fields
-3. get metadata for that detection
-    ...
-4. get the crossmatches and prv_candidates for that object from the aux table
-*/
+#[derive(serde::Deserialize, serde::Serialize)]
+struct PrvCandidate {
+    jd: f64,
+    band: String,
+    magpsf: f64,
+    sigmapsf: f64,
+    diffmaglim: f64,
+}
 
-#[get("/alerts/{survey_name}/get_object/{object_id}")]
+#[derive(serde::Deserialize, serde::Serialize)]
+struct PrvNondetection {
+    jd: f64,
+    band: String,
+    diffmaglim: f64,
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
+struct Alert {
+    candid: i64,
+    object_id: String,
+    candidate: Document,
+    prv_candidates: Vec<PrvCandidate>,
+    prv_nondetections: Vec<PrvNondetection>,
+    classifications: Document,
+    cutout_science: Vec<u8>,
+    cutout_template: Vec<u8>,
+    cutout_difference: Vec<u8>,
+}
+
+#[get("/alerts/{survey_name}/{object_id}")]
 pub async fn get_object(
     client: web::Data<Client>,
     path: web::Path<(String, String)>,
@@ -26,89 +45,189 @@ pub async fn get_object(
     let (survey_name, object_id) = path.into_inner();
     let survey_name = survey_name.to_uppercase(); // TEMP to match with "ZTF"
 
-    let alerts_collection: Collection<mongodb::bson::Document> = client
-        .database(DB_NAME)
-        .collection(&format!("{}_alerts", survey_name));
+    let db = client.database(DB_NAME);
 
-    let aux_collection: Collection<Document> = client
-        .database(DB_NAME)
-        .collection(&format!("{}_alerts_aux", survey_name));
-    
-    // find options for getting most recent alert from alerts collection
-    let find_options_recent = mongodb::options::FindOptions::builder()
-        .sort(doc! {
-            "candidate.jd": 1,
-        })
-        .projection(doc! {
-            "_id": 1,
-            "candidate": 1,
-            "cutoutScience": 1,
-            "cutoutTemplate": 1,
-            "cutoutDifference": 1,
-        })
-        .build();
+    let alerts_collection: Collection<Document> = db.collection(&format!("{}_alerts", survey_name));
 
-    // get the most recent alert for the object
-    let mut alert_cursor = match alerts_collection
+    // first we find the candid (_id) of the latest alert with that object_id
+    let latest_alert_candid = match alerts_collection
         .find(doc! {
             "objectId": object_id.clone(),
         })
-        .with_options(find_options_recent)
-        .await {
-            Ok(cursor) => cursor,
-            Err(error) => {
-                return response::internal_error(&format!("error getting documents: {}", error));
-            }
-        };
-    let newest_alert = match alert_cursor
-        .try_next()
-        .await {
-            Ok(Some(alert)) => alert,
-            Ok(None) => {
-                return response::ok(&format!("no object found with id {}", object_id), serde_json::Value::Null);
-            },
-            Err(error) => {
-                return response::internal_error(&format!("error getting documents: {}", error));
-            }
-        };
-
-    let find_options_aux = mongodb::options::FindOneOptions::builder()
         .projection(doc! {
-            "_id": 0,
-            "prv_candidates": 1,
-            "cross_matches": 1,
+            "_id": 1,
         })
-        .build();
-    
-    // get crossmatches and light curve data from aux collection
-    let aux_entry = match aux_collection
-        .find_one(doc! {
-            "_id": object_id.clone(),
+        .sort(doc! {
+            "candidate.jd": -1,
         })
-        .with_options(find_options_aux)
-        .await {
-            Ok(entry) => {
-                match entry {
-                    Some(doc) => doc,
-                    None => {
-                        return response::ok("no aux entry found", serde_json::Value::Null);
+        .limit(1)
+        .await
+    {
+        Ok(mut cursor) => match cursor.try_next().await {
+            Ok(Some(doc)) => doc.get_i64("_id").unwrap(),
+            Ok(None) => {
+                return response::ok(
+                    &format!("no object found with id {}", object_id),
+                    serde_json::Value::Null,
+                );
+            }
+            Err(error) => {
+                return response::internal_error(&format!("error getting documents: {}", error));
+            }
+        },
+        Err(error) => {
+            return response::internal_error(&format!("error getting documents: {}", error));
+        }
+    };
+
+    let alerts_collection: Collection<Alert> = db.collection(&format!("{}_alerts", survey_name));
+
+    let mut alert_cursor = alerts_collection
+        .aggregate(vec![
+            doc! {
+                "$match": {
+                    "_id": latest_alert_candid,
+                }
+            },
+            doc! {
+                "$project": {
+                    "objectId": 1,
+                    "candidate": 1,
+                    "classifications": 1,
+                }
+            },
+            doc! {
+                "$lookup": {
+                    "from": "ZTF_alerts_aux",
+                    "localField": "objectId",
+                    "foreignField": "_id",
+                    "as": "aux"
+                }
+            },
+            doc! {
+                "$lookup": {
+                    "from": "ZTF_alerts_cutouts",
+                    "localField": "_id",
+                    "foreignField": "_id",
+                    "as": "object"
+                }
+            },
+            doc! {
+                "$project": doc! {
+                    "objectId": 1,
+                    "candidate": 1,
+                    "classifications": 1,
+                    "prv_candidates": doc! {
+                        "$filter": doc! {
+                            "input": doc! {
+                                "$arrayElemAt": [
+                                    "$aux.prv_candidates",
+                                    0
+                                ]
+                            },
+                            "as": "x",
+                            "cond": doc! {
+                                "$and": [
+                                    {
+                                        "$gte": [
+                                            {
+                                                "$subtract": [
+                                                    "$candidate.jd",
+                                                    "$$x.jd"
+                                                ]
+                                            },
+                                            0
+                                        ]
+                                    },
+
+                                ]
+                            }
+                        }
+                    },
+                    "prv_nondetections": doc! {
+                        "$filter": doc! {
+                            "input": doc! {
+                                "$arrayElemAt": [
+                                    "$aux.prv_nondetections",
+                                    0
+                                ]
+                            },
+                            "as": "x",
+                            "cond": doc! {
+                                "$and": [
+                                    {
+                                        "$gte": [
+                                            {
+                                                "$subtract": [
+                                                    "$candidate.jd",
+                                                    "$$x.jd"
+                                                ]
+                                            },
+                                            0
+                                        ]
+                                    },
+
+                                ]
+                            }
+                        }
+                    },
+                    "cutoutScience": doc! {
+                        "$arrayElemAt": [
+                            "$object.cutoutScience",
+                            0
+                        ]
+                    },
+                    "cutoutTemplate": doc! {
+                        "$arrayElemAt": [
+                            "$object.cutoutTemplate",
+                            0
+                        ]
+                    },
+                    "cutoutDifference": doc! {
+                        "$arrayElemAt": [
+                            "$object.cutoutDifference",
+                            0
+                        ]
                     }
                 }
             },
-            Err(error) => {
-                return response::internal_error(&format!("error getting documents: {}", error));
-            }
-        };
+            doc! {
+                "$project": doc! {
+                    "objectId": 1,
+                    "candidate": 1,
+                    "classifications": 1,
+                    "prv_candidates.jd": 1,
+                    "prv_candidates.magpsf": 1,
+                    "prv_candidates.sigmapsf": 1,
+                    "prv_candidates.band": 1,
+                    "prv_candidates.diffmaglim": 1,
+                    "prv_nondetections.jd": 1,
+                    "prv_nondetections.band": 1,
+                    "prv_nondetections.diffmaglim": 1,
+                    "cutoutScience": 1,
+                    "cutoutTemplate": 1,
+                    "cutoutDifference": 1
+                }
+            },
+        ])
+        .await
+        .unwrap();
 
-    let mut data = doc!{};
-    // organize response
-    data.insert("objectId", object_id.clone());
-    data.insert("alert metadata", newest_alert.get_document("candidate").unwrap());
-    data.insert("cutoutScience", newest_alert.get_document("cutoutScience").unwrap());
-    data.insert("cutoutTemplate", newest_alert.get_document("cutoutTemplate").unwrap());
-    data.insert("cutoutDifference", newest_alert.get_document("cutoutDifference").unwrap());
-    data.insert("prv_candidates", aux_entry.get_array("prv_candidates").unwrap());
-    data.insert("cross_matches", aux_entry.get_document("cross_matches").unwrap());
-    
-    return response::ok(&format!("object found with object_id: {}", object_id), serde_json::json!(data));
+    let alert = match alert_cursor.try_next().await {
+        Ok(Some(alert)) => alert,
+        Ok(None) => {
+            return response::ok(
+                &format!("no object found with id {}", object_id),
+                serde_json::Value::Null,
+            );
+        }
+        Err(error) => {
+            return response::internal_error(&format!("error getting documents: {}", error));
+        }
+    };
+
+    return response::ok(
+        &format!("object found with object_id: {}", object_id),
+        serde_json::json!(alert),
+    );
 }
