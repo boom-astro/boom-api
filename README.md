@@ -82,12 +82,42 @@ development environment requirements:
 }
 ```
 
-## Add new pipeline version to existing filter
+## Add new pipeline version to existing filter (W.I.P.)
 **Endpoint**: `PATCH "/filter/filter_id"`\
 **Body**:
 ```
 {
     "pipeline": aggregate pipeline (array of bson documents)
+}
+```
+
+**Example Body**:
+```
+{
+    "pipeline": [
+        {
+            "$project": {
+                "cutoutScience": 0, 
+                "cutoutDifference": 0, 
+                "cutoutTemplate": 0, 
+                "publisher": 0, 
+                "schemavsn": 0
+            }
+        },
+        {
+            "$match": {
+                "candidate.drb": {
+                    "$gt": 0.5
+                }, 
+                "candidate.ndethist": {
+                    "$gt": 1.0
+                }, 
+                "candidate.magpsf": {
+                    "$lte": 18.5
+                }
+            }
+        },
+    ]
 }
 ```
 

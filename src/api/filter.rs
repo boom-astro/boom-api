@@ -1,12 +1,12 @@
-use std::vec;
+use super::util;
 use crate::models::filter_models::*;
-use actix_web::{post, patch, web, HttpResponse};
+use actix_web::{patch, post, web, HttpResponse};
 use mongodb::{
     bson::{doc, Document},
     Client, Collection,
 };
-
-use super::util;
+use std::vec;
+use uuid::Uuid;
 
 const DB_NAME: &str = "boom";
 
@@ -20,11 +20,12 @@ struct Filter {
 // checks if a filter with the given id already exists in the database
 async fn check_filter_exists(
     client: web::Data<Client>,
-    filter_id: i32
+    filter_id: i32,
 ) -> Result<bool, mongodb::error::Error> {
     let filter_collection = util::get_filter_collection(client, DB_NAME);
     let result = filter_collection
-        .count_documents(doc!{ "filter_id": filter_id }).await;
+        .count_documents(doc! { "filter_id": filter_id })
+        .await;
     match result {
         Ok(count) => {
             return Ok(count > 0);
@@ -38,7 +39,7 @@ async fn check_filter_exists(
 fn build_test_pipeline(
     filter_catalog: String,
     filter_perms: Vec<i32>,
-    mut filter_pipeline: Vec<Document>
+    mut filter_pipeline: Vec<Document>,
 ) -> Vec<Document> {
     let mut out_pipeline = vec![
         doc! {
@@ -219,6 +220,7 @@ fn build_filter_bson(filter: Filter) -> Result<mongodb::bson::Document, mongodb:
     // generate new object id
     let id = mongodb::bson::oid::ObjectId::new();
     let date_time = mongodb::bson::DateTime::now();
+    let pipeline_id = Uuid::new_v4().to_string(); // generate random pipeline id
     let database_filter_bson = doc! {
         "_id": id,
         "group_id": 41, // consistent with other test filters
@@ -228,9 +230,8 @@ fn build_filter_bson(filter: Filter) -> Result<mongodb::bson::Document, mongodb:
         "active": true,
         "active_fid": filter.id,
         "fv": [
-            // TODO: generate pipeline id
             {
-                "fid": "some_pipeline_id",
+                "fid": pipeline_id,
                 "pipeline": filter.pipeline,
                 "created_at": date_time,
             }
@@ -253,27 +254,25 @@ pub async fn add_filter_version(
     let pipeline = match body.clone().pipeline {
         Some(pipeline) => pipeline,
         None => {
-            return HttpResponse::BadRequest().body(
-                "pipeline not provided. pipeline required for adding a filter version"
-            );
+            return HttpResponse::BadRequest()
+                .body("pipeline not provided. pipeline required for adding a filter version");
         }
     };
-    println!("got filter version request for filter id: {}", filter_id);
+
     let collection = util::get_filter_collection(client.clone(), DB_NAME);
     let owner_filter = match collection.find_one(doc! {"filter_id": filter_id}).await {
         Ok(Some(filter)) => filter,
-        Ok(None) => { 
-            return HttpResponse::BadRequest().body(
-                format!("filter with id {} does not exist", filter_id)
-            );
+        Ok(None) => {
+            return HttpResponse::BadRequest()
+                .body(format!("filter with id {} does not exist", filter_id));
         }
         Err(e) => {
-            return HttpResponse::InternalServerError().body(
-                format!("failed to find filter with id {}. error: {}", filter_id, e)
-            );
+            return HttpResponse::InternalServerError().body(format!(
+                "failed to find filter with id {}. error: {}",
+                filter_id, e
+            ));
         }
     };
-    println!("found owning filter {} in database, testing new pipeline", filter_id);
     let catalog = owner_filter.get_str("catalog").unwrap();
     let permissions = owner_filter.get_array("permissions").unwrap();
     let permissions: Vec<i32> = permissions
@@ -282,19 +281,48 @@ pub async fn add_filter_version(
         .collect();
     // create test version of filter and test it
     let test_pipeline = build_test_pipeline(catalog.to_string(), permissions, pipeline.clone());
-    println!("built new testing pipeline, testing it");
+
     match run_test_pipeline(client.clone(), catalog.to_string(), test_pipeline).await {
         Ok(()) => {}
         Err(e) => {
-            return HttpResponse::BadRequest().body(
-                format!("Invalid filter submitted, filter test failed with error: {}", e));
+            return HttpResponse::BadRequest().body(format!(
+                "Invalid filter submitted, filter test failed with error: {}",
+                e
+            ));
         }
     }
-    println!("successfully tested new pipeline. submitting to database");
-    // TODO: create production version of pipeline and add it to the owning filter's fv array
-    
 
-    return HttpResponse::Ok().body(format!("filter id: {}", filter_id));
+    let new_pipeline_id = Uuid::new_v4().to_string();
+    let date_time = mongodb::bson::DateTime::now();
+    let new_pipeline_bson = doc! {
+        "fid": new_pipeline_id,
+        "pipeline": pipeline,
+        "created_at": date_time,
+    };
+    let update_result = collection
+        .update_one(
+            doc! {"filter_id": filter_id},
+            doc! {
+                "$push": {
+                    "fv": new_pipeline_bson
+                }
+            },
+        )
+        .await;
+    match update_result {
+        Ok(_) => {
+            return HttpResponse::Ok().body(format!(
+                "successfully added new pipeline version to filter id: {}",
+                filter_id
+            ));
+        }
+        Err(e) => {
+            return HttpResponse::InternalServerError().body(format!(
+                "failed to add new pipeline to filter. error: {}",
+                e
+            ));
+        }
+    }
 }
 
 #[post("/filter")]
@@ -336,8 +364,10 @@ pub async fn post_filter(
     match run_test_pipeline(client.clone(), catalog.clone(), filter.pipeline).await {
         Ok(()) => {}
         Err(e) => {
-            return HttpResponse::BadRequest().body(
-                format!("Invalid filter submitted, filter test failed with error: {}", e));
+            return HttpResponse::BadRequest().body(format!(
+                "Invalid filter submitted, filter test failed with error: {}",
+                e
+            ));
         }
     }
 
@@ -353,7 +383,8 @@ pub async fn post_filter(
     let filter_bson = match build_filter_bson(database_filter) {
         Ok(bson) => bson,
         Err(e) => {
-            return HttpResponse::BadRequest().body(format!("unable to create filter bson, got error: {}", e));
+            return HttpResponse::BadRequest()
+                .body(format!("unable to create filter bson, got error: {}", e));
         }
     };
     match filter_collection.insert_one(filter_bson).await {
@@ -362,10 +393,9 @@ pub async fn post_filter(
         }
         Err(e) => {
             return HttpResponse::BadRequest().body(format!(
-                "failed to insert filter into database. error: {}", 
+                "failed to insert filter into database. error: {}",
                 e
             ));
         }
     }
 }
-
