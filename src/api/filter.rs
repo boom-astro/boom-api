@@ -12,7 +12,7 @@ const DB_NAME: &str = "boom";
 
 struct Filter {
     pub pipeline: Vec<mongodb::bson::Document>,
-    pub permissions: Vec<i64>,
+    pub permissions: Vec<i32>,
     pub catalog: String,
     pub id: i32,
 }
@@ -115,7 +115,7 @@ fn build_test_pipeline(
 fn build_test_filter(
     filter_catalog: String,
     filter_id: i32,
-    filter_perms: Vec<i64>,
+    filter_perms: Vec<i32>,
     mut filter_pipeline: Vec<Document>,
 ) -> Filter {
     let mut out_filter = vec![
@@ -228,7 +228,7 @@ fn build_filter_bson(filter: Filter) -> Result<mongodb::bson::Document, mongodb:
         "catalog": filter.catalog,
         "permissions": filter.permissions,
         "active": true,
-        "active_fid": filter.id,
+        "active_fid": pipeline_id.clone(),
         "fv": [
             {
                 "fid": pipeline_id,

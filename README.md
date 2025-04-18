@@ -1,13 +1,27 @@
-# README
+
+## Development
 development environment requirements:
 1. active boom mongodb instance
 2. postman (or some way of making api calls) for querying
 
 # Api Documentation
 
-# Filtering (W.I.P.)
+## Table of contents
+### Filtering
+* [Adding a new filter](#post-a-filter)
+* [Adding a filter version](#add-a-new-filter-version)
+### Querying
+* [retrieve an object](#get-object)
+* [Getting database & collection info](#get-database-info)
+* [Cone Search](#cone-search)
+* [Count Documents](#count-documents)
+* [Sample Alerts](#sample-alerts)
+* [Find Alerts](#find-alerts)
 
-## Submit a new filter
+# Filtering
+## Post a Filter
+Adds a filter to the database.
+
 **Endpoint**: `POST "/filter"`\
 **Body**:
 ```
@@ -82,8 +96,10 @@ development environment requirements:
 }
 ```
 
-## Add new pipeline version to existing filter (W.I.P.)
-**Endpoint**: `PATCH "/filter/filter_id"`\
+## Add a New Filter Version
+Adds a new pipeline to a filter's pipeline array and sets the filter's active pipeline id to the new pipeline's id.
+
+**Endpoint**: `PATCH "/filter/{filter_id}"`\
 **Body**:
 ```
 {
@@ -116,14 +132,23 @@ development environment requirements:
                     "$lte": 18.5
                 }
             }
-        },
+        }
     ]
 }
 ```
 
 # Querying
 
-## Info
+## Get Object
+Retreives the most recent detection of an object from the specified catalog.
+
+**Endpoint**: `Get "/alerts/{survey_name}/get_object/{object_id}"`\
+**catalog_name**: String. e.g., "ZTF", "NED"\
+**Example Query**: `Get "/alerts/ZTF/get_object/ZTF18aajpnun`
+
+## Get Database Info
+Get database or catalog information / specs.
+
 **Endpoint**: `Get "/query/info"`\
 **command_types**: "db_info", "index_info", "catalog_info", "catalog_names"\
 **catalog_names**: Array Strings. e.g., `["ZTF_alerts",...]` (not required for db_info, catalog_names)\
@@ -135,25 +160,9 @@ development environment requirements:
 }
 ```
 
-## Get Object
-**Endpoint**: `Get "/alerts/get_object"`\
-**catalog_name**: String. e.g., "ZTF_alerts"\
-**Body**:
-```
-{
-    "catalog": <catalog_name>,
-    "object_id": <objectId>
-}
-```
-**Example Body**:
-```
-{
-    "catalog": "ZTF",
-    "object_id": "ZTF18aajpnun"
-}
-```
-
 ## Cone Search
+Performs a cone search on a catalog and returns the resulting data.
+
 **Endpoint**: `Get "/query/cone_search"`\
 **Unit**: "Arcseconds", "Arcminutes", "Degrees", "Radians"\
 **Body**:
@@ -197,6 +206,8 @@ development environment requirements:
 ```
 
 ## Count Documents
+Gets the number of documents which pass through a filter.
+
 **Endpoint**: `GET "/query/count_documents"`\
 **catalog_name**: String. e.g., "ZTF_alerts"\
 **Body:**
@@ -210,7 +221,9 @@ development environment requirements:
 }
 ```
 
-## Sample
+## Sample Alerts
+Retreives a sample of alerts from the database.
+
 **Endpoint**: `GET "/query/sample"`\
 **catalog_name**: String. e.g., "ZTF_alerts"\
 **Body:**
@@ -223,7 +236,9 @@ development environment requirements:
 }
 ```
 
-## Find
+## Find Alerts
+Performs a find query on the database.
+
 **Endpoint**: `GET "/query/find"`\
 **catalog_name**: String. e.g., "ZTF_alerts"\
 **Body:**
