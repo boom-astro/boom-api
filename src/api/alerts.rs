@@ -227,8 +227,10 @@ pub async fn get_object(
         classification_history.push(classification);
     }
 
-    let alert_with_classification_history =
-        AlertWithClassificationHistory { alert, classification_history };
+    let alert_with_classification_history = AlertWithClassificationHistory {
+        alert,
+        classification_history,
+    };
 
     return response::ok(
         &format!("object found with object_id: {}", object_id),
