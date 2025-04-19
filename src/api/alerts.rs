@@ -9,32 +9,10 @@ use mongodb::{
 const DB_NAME: &str = "boom";
 
 #[derive(serde::Deserialize, serde::Serialize)]
-struct PrvCandidate {
-    jd: f64,
-    band: String,
-    magpsf: f64,
-    sigmapsf: f64,
-    diffmaglim: f64,
-}
-
-#[derive(serde::Deserialize, serde::Serialize)]
-struct PrvNondetection {
-    jd: f64,
-    band: String,
-    diffmaglim: f64,
-}
-
-#[derive(serde::Deserialize, serde::Serialize)]
-struct Alert {
-    candid: i64,
-    object_id: String,
-    candidate: Document,
-    prv_candidates: Vec<PrvCandidate>,
-    prv_nondetections: Vec<PrvNondetection>,
-    classifications: Document,
-    cutout_science: Vec<u8>,
-    cutout_template: Vec<u8>,
-    cutout_difference: Vec<u8>,
+struct AlertWithClassificationHistory {
+    #[serde(flatten)]
+    alert: Document,
+    classification_history: Vec<Document>,
 }
 
 #[get("/alerts/{survey_name}/{object_id}")]
@@ -80,7 +58,7 @@ pub async fn get_object(
         }
     };
 
-    let alerts_collection: Collection<Alert> = db.collection(&format!("{}_alerts", survey_name));
+    let alerts_collection: Collection<Document> = db.collection(&format!("{}_alerts", survey_name));
 
     let mut alert_cursor = alerts_collection
         .aggregate(vec![
@@ -226,8 +204,34 @@ pub async fn get_object(
         }
     };
 
+    // retrieve the history of alert classifications
+    let classification_history_collection: Collection<Document> =
+        db.collection(&format!("{}_alerts", survey_name));
+    let mut classification_history_cursor = classification_history_collection
+        .find(doc! {
+            "objectId": object_id.clone(),
+        })
+        .projection(doc! {
+            "jd": "$candidate.jd",
+            "drb" : "$candidate.drb",
+            "classifications": 1,
+        })
+        .sort(doc! {
+            "candidate.jd": 1,
+        })
+        .await
+        .unwrap();
+
+    let mut classification_history: Vec<Document> = vec![];
+    while let Some(classification) = classification_history_cursor.try_next().await.unwrap() {
+        classification_history.push(classification);
+    }
+
+    let alert_with_classification_history =
+        AlertWithClassificationHistory { alert, classification_history };
+
     return response::ok(
         &format!("object found with object_id: {}", object_id),
-        serde_json::json!(alert),
+        serde_json::json!(alert_with_classification_history),
     );
 }
