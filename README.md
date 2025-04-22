@@ -140,7 +140,7 @@ Adds a new pipeline to a filter's pipeline array and sets the filter's active pi
 # Querying
 
 ## Get Object
-Retreives the most recent detection of an object from the specified catalog.
+Retrieves the most recent detection of an object with it's lightcurves, crossmatches, metadata, and images from the specified catalog.
 
 **Endpoint**: `Get "/alerts/{survey_name}/get_object/{object_id}"`\
 **catalog_name**: String. e.g., "ZTF", "NED"\

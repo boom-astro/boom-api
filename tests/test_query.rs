@@ -5,7 +5,7 @@ use actix_web::{
 #[cfg(test)]
 use boom_api::{
     api::{query, query::build_options},
-    models::query_models::{Query, QueryBody, QueryKwargs, Unit},
+    models::query_models::{QueryKwargs, Unit},
 };
 use mongodb::{
     bson::{doc, Document},
@@ -13,7 +13,7 @@ use mongodb::{
     Client,
 };
 
-// TODO: put in conf
+// TODO: put in config
 const DB_NAME: &str = "boom";
 const CATALOG_NAME: &str = "ZTF";
 
@@ -131,13 +131,13 @@ fn test_build_cone_search_filter() {
 #[actix_rt::test]
 async fn test_get_catalog_names() {
     let client = get_web_client().await;
-    let _ = query::get_catalog_names(client, DB_NAME).await;
+    let _ = query::get_catalog_names(client.database(DB_NAME)).await;
 }
 
 #[actix_rt::test]
 async fn test_get_catalog_info() {
     let client = get_web_client().await;
-    let catalog_names = query::get_catalog_names(client.clone(), DB_NAME)
+    let catalog_names = query::get_catalog_names(client.database(DB_NAME))
         .await
         .unwrap();
     let catalog_name = if catalog_names.len() > 0 {
@@ -145,13 +145,13 @@ async fn test_get_catalog_info() {
     } else {
         return;
     };
-    let _ = query::get_catalog_info(client.clone(), catalog_name, DB_NAME);
+    let _ = query::get_catalog_info(client.database(DB_NAME), catalog_name);
 }
 
 #[actix_rt::test]
 async fn test_get_index_info() {
     let client = get_web_client().await;
-    let catalog_names = query::get_catalog_names(client.clone(), DB_NAME)
+    let catalog_names = query::get_catalog_names(client.database(DB_NAME))
         .await
         .unwrap();
     let catalog_name = if catalog_names.len() > 0 {
@@ -159,13 +159,13 @@ async fn test_get_index_info() {
     } else {
         return;
     };
-    let _ = query::get_index_info(client, catalog_name, DB_NAME);
+    let _ = query::get_index_info(client.database(DB_NAME), catalog_name);
 }
 
 #[actix_rt::test]
 async fn test_get_db_info() {
     let client = get_web_client().await;
-    let _ = query::get_db_info(client.clone(), DB_NAME).await;
+    let _ = query::get_db_info(client.database(DB_NAME)).await;
 }
 
 #[actix_rt::test]

@@ -1,3 +1,4 @@
+use crate::models::{query_models::*, response};
 use actix_web::{get, web, HttpResponse};
 use futures::TryStreamExt;
 use mongodb::{
@@ -5,11 +6,6 @@ use mongodb::{
     Client, Collection, IndexModel,
 };
 use std::collections::HashMap;
-
-use crate::{
-    api::util,
-    models::{query_models::*, response},
-};
 
 const DB_NAME: &str = "boom";
 
@@ -66,11 +62,10 @@ pub fn build_cone_search_filter(
 }
 
 pub async fn get_catalog_names(
-    client: web::Data<Client>,
-    db_name: &str,
+    db: mongodb::Database,
 ) -> Result<Vec<String>, mongodb::error::Error> {
     // get collection names in alphabetical order
-    let collection_names = match client.database(db_name).list_collection_names().await {
+    let collection_names = match db.list_collection_names().await {
         Ok(c) => c,
         Err(e) => return Err(e),
     };
@@ -84,14 +79,12 @@ pub async fn get_catalog_names(
 }
 
 pub async fn get_catalog_info(
-    client: web::Data<Client>,
+    db: mongodb::Database,
     catalogs: Vec<String>,
-    db_name: &str,
 ) -> Result<Vec<Document>, mongodb::error::Error> {
     let mut data = Vec::new();
     for catalog in catalogs {
-        match client
-            .database(db_name)
+        match db
             .run_command(doc! {
                 "collstats": catalog
             })
@@ -105,13 +98,12 @@ pub async fn get_catalog_info(
 }
 
 pub async fn get_index_info(
-    client: web::Data<Client>,
+    db: mongodb::Database,
     catalogs: Vec<String>,
-    db_name: &str,
 ) -> Result<Vec<Vec<IndexModel>>, mongodb::error::Error> {
     let mut out_data = Vec::new();
     for i in 0..catalogs.len() {
-        let collection = util::get_collection(client.clone(), &catalogs[i], db_name);
+        let collection: Collection<Document> = db.collection(&catalogs[i]);
         let cursor = match collection.list_indexes().await {
             Ok(c) => c,
             Err(e) => return Err(e),
@@ -125,15 +117,8 @@ pub async fn get_index_info(
     return Ok(out_data);
 }
 
-pub async fn get_db_info(
-    client: web::Data<Client>,
-    db_name: &str,
-) -> Result<Document, mongodb::error::Error> {
-    let data = match client
-        .database(db_name)
-        .run_command(doc! { "dbstats": 1 })
-        .await
-    {
+pub async fn get_db_info(db: mongodb::Database) -> Result<Document, mongodb::error::Error> {
+    let data = match db.run_command(doc! { "dbstats": 1 }).await {
         Ok(d) => d,
         Err(e) => return Err(e),
     };
@@ -174,6 +159,7 @@ pub async fn get_collection_sample(
 
 #[get("/query/info")]
 pub async fn get_info(client: web::Data<Client>, body: web::Json<InfoQueryBody>) -> HttpResponse {
+    let db = client.database(DB_NAME);
     let command = match body.command.clone() {
         Some(c) => c,
         None => {
@@ -182,7 +168,7 @@ pub async fn get_info(client: web::Data<Client>, body: web::Json<InfoQueryBody>)
     };
     // get collection names in alphabetical order
     if command == "catalog_names" {
-        let data = match get_catalog_names(client, DB_NAME).await {
+        let data = match get_catalog_names(db.clone()).await {
             Ok(d) => d,
             Err(e) => {
                 return response::internal_error(&format!("Error getting catalog names: {:?}", e));
@@ -197,7 +183,7 @@ pub async fn get_info(client: web::Data<Client>, body: web::Json<InfoQueryBody>)
                 return response::bad_request("catalog(s) required for catalog_info");
             }
         };
-        let data = match get_catalog_info(client, catalogs.clone(), DB_NAME).await {
+        let data = match get_catalog_info(db.clone(), catalogs.clone()).await {
             Ok(d) => d,
             Err(e) => {
                 return response::internal_error(&format!("Error getting catalog info: {:?}", e));
@@ -215,7 +201,7 @@ pub async fn get_info(client: web::Data<Client>, body: web::Json<InfoQueryBody>)
                 return response::bad_request("catalog(s) required for index_info");
             }
         };
-        let data = get_index_info(client, catalogs.clone(), DB_NAME).await;
+        let data = get_index_info(db.clone(), catalogs.clone()).await;
         match data {
             Ok(d) => {
                 return response::ok(
@@ -228,7 +214,7 @@ pub async fn get_info(client: web::Data<Client>, body: web::Json<InfoQueryBody>)
             }
         }
     } else if command == "db_info" {
-        let data = match get_db_info(client, DB_NAME).await {
+        let data = match get_db_info(db.clone()).await {
             Ok(d) => d,
             Err(e) => {
                 return response::internal_error(&format!("Error getting database info: {:?}", e));
@@ -247,7 +233,8 @@ pub async fn sample(client: web::Data<Client>, body: web::Json<QueryBody>) -> Ht
         Some(c) => c,
         None => return response::bad_request("catalog name required for sample"),
     };
-    let collection: Collection<Document> = util::get_collection(client, &catalog, DB_NAME);
+
+    let collection: Collection<Document> = client.database(DB_NAME).collection(&catalog);
     let size = this_query.size.unwrap_or(1);
     let docs = match get_collection_sample(collection, size).await {
         Ok(d) => d,
@@ -271,7 +258,7 @@ pub async fn count_documents(
         Some(c) => c,
         None => return response::bad_request("catalog name required for count_documents"),
     };
-    let collection = util::get_collection(client, &catalog, DB_NAME);
+    let collection: Collection<Document> = client.database(DB_NAME).collection(&catalog);
     let filter = this_query.filter.unwrap_or(doc! {});
     let doc_count = collection.count_documents(filter).await;
     match doc_count {
@@ -306,7 +293,7 @@ pub async fn find(client: web::Data<Client>, body: web::Json<QueryBody>) -> Http
         this_query.projection,
         body.kwargs.clone().unwrap_or_default(),
     );
-    let collection = util::get_collection(client, &catalog, DB_NAME);
+    let collection: Collection<Document> = client.database(DB_NAME).collection(&catalog);
     let cursor = match collection.find(filter).with_options(find_options).await {
         Ok(c) => c,
         Err(e) => {
@@ -359,7 +346,7 @@ pub async fn cone_search(
         }
     };
 
-    let collection = util::get_collection(client, &catalog, DB_NAME);
+    let collection: Collection<Document> = client.database(DB_NAME).collection(&catalog);
 
     let projection = catalog_details.projection;
     let input_filter = catalog_details.filter.unwrap_or(doc! {});

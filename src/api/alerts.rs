@@ -1,7 +1,10 @@
-use crate::{api::util, models::response};
+use crate::models::response;
 use actix_web::{get, web, HttpResponse};
 use futures::TryStreamExt;
-use mongodb::{bson::doc, Client};
+use mongodb::{
+    bson::{doc, Document},
+    Client, Collection,
+};
 
 const DB_NAME: &str = "boom";
 
@@ -12,13 +15,10 @@ pub async fn get_object(
 ) -> HttpResponse {
     let (survey_name, object_id) = path.into_inner();
     let survey_name = survey_name.to_uppercase(); // (TEMP) to match with "ZTF"
-    let alerts_collection =
-        util::get_collection(client.clone(), &format!("{}_alerts", survey_name), DB_NAME);
-    let aux_collection = util::get_collection(
-        client.clone(),
-        &format!("{}_alerts_aux", survey_name),
-        DB_NAME,
-    );
+    let db = client.database(DB_NAME);
+    let alerts_collection: Collection<Document> = db.collection(&format!("{}_alerts", survey_name));
+    let aux_collection: Collection<Document> =
+        db.collection(&format!("{}_alerts_aux", survey_name));
     // find options for getting most recent alert from alerts collection
     let find_options_recent = mongodb::options::FindOptions::builder()
         .sort(doc! {

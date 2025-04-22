@@ -1,4 +1,3 @@
-use super::util;
 use crate::models::filter_models::*;
 use actix_web::{patch, post, web, HttpResponse};
 use mongodb::{
@@ -17,25 +16,6 @@ struct Filter {
     pub id: i32,
 }
 
-// checks if a filter with the given id already exists in the database
-async fn check_filter_exists(
-    client: web::Data<Client>,
-    filter_id: i32,
-) -> Result<bool, mongodb::error::Error> {
-    let filter_collection = util::get_filter_collection(client, DB_NAME);
-    let result = filter_collection
-        .count_documents(doc! { "filter_id": filter_id })
-        .await;
-    match result {
-        Ok(count) => {
-            return Ok(count > 0);
-        }
-        Err(e) => {
-            return Err(e);
-        }
-    }
-}
-
 fn build_test_pipeline(
     filter_catalog: String,
     filter_perms: Vec<i32>,
@@ -43,12 +23,8 @@ fn build_test_pipeline(
 ) -> Vec<Document> {
     let mut out_pipeline = vec![
         doc! {
-            "$project": doc! {
-                "cutoutScience": 0,
-                "cutoutDifference": 0,
-                "cutoutTemplate": 0,
-                "publisher": 0,
-                "schemavsn": 0
+            "$match": doc! {
+                // during filter::run proper candis are inserted here
             }
         },
         doc! {
@@ -62,7 +38,6 @@ fn build_test_pipeline(
         doc! {
             "$project": doc! {
                 "objectId": 1,
-                "candid": 1,
                 "candidate": 1,
                 "classifications": 1,
                 "coordinates": 1,
@@ -89,7 +64,7 @@ fn build_test_pipeline(
                                         &filter_perms
                                     ]
                                 },
-                                {
+                                { // maximum 1 year of past data
                                     "$lt": [
                                         {
                                             "$subtract": [
@@ -99,7 +74,14 @@ fn build_test_pipeline(
                                         },
                                         365
                                     ]
+                                },
+                                { // only datapoints up to (and including) current alert
+                                    "$lte": [
+                                        "$$x.jd",
+                                        "$candidate.jd"
+                                    ]
                                 }
+
                             ]
                         }
                     }
@@ -109,89 +91,6 @@ fn build_test_pipeline(
     ];
     out_pipeline.append(&mut filter_pipeline);
     return out_pipeline;
-}
-
-// prepends necessary portions to filter to run in database
-fn build_test_filter(
-    filter_catalog: String,
-    filter_id: i32,
-    filter_perms: Vec<i32>,
-    mut filter_pipeline: Vec<Document>,
-) -> Filter {
-    let mut out_filter = vec![
-        doc! {
-            "$project": doc! {
-                "cutoutScience": 0,
-                "cutoutDifference": 0,
-                "cutoutTemplate": 0,
-                "publisher": 0,
-                "schemavsn": 0
-            }
-        },
-        doc! {
-            "$lookup": doc! {
-                "from": format!("{}_aux", filter_catalog),
-                "localField": "objectId",
-                "foreignField": "_id",
-                "as": "aux"
-            }
-        },
-        doc! {
-            "$project": doc! {
-                "objectId": 1,
-                "candid": 1,
-                "candidate": 1,
-                "classifications": 1,
-                "coordinates": 1,
-                "cross_matches": doc! {
-                    "$arrayElemAt": [
-                        "$aux.cross_matches",
-                        0
-                    ]
-                },
-                "prv_candidates": doc! {
-                    "$filter": doc! {
-                        "input": doc! {
-                            "$arrayElemAt": [
-                                "$aux.prv_candidates",
-                                0
-                            ]
-                        },
-                        "as": "x",
-                        "cond": doc! {
-                            "$and": [
-                                {
-                                    "$in": [
-                                        "$$x.programid",
-                                        &filter_perms
-                                    ]
-                                },
-                                {
-                                    "$lt": [
-                                        {
-                                            "$subtract": [
-                                                "$candidate.jd",
-                                                "$$x.jd"
-                                            ]
-                                        },
-                                        365
-                                    ]
-                                }
-                            ]
-                        }
-                    }
-                },
-            }
-        },
-    ];
-    out_filter.append(&mut filter_pipeline);
-    let built_filt = Filter {
-        pipeline: out_filter,
-        permissions: filter_perms,
-        catalog: filter_catalog,
-        id: filter_id,
-    };
-    return built_filt;
 }
 
 // tests the functionality of a filter by running it on alerts in database
@@ -259,7 +158,7 @@ pub async fn add_filter_version(
         }
     };
 
-    let collection = util::get_filter_collection(client.clone(), DB_NAME);
+    let collection: Collection<Document> = client.database(DB_NAME).collection("filters");
     let owner_filter = match collection.find_one(doc! {"filter_id": filter_id}).await {
         Ok(Some(filter)) => filter,
         Ok(None) => {
@@ -359,9 +258,10 @@ pub async fn post_filter(
 
     // Test filter received from user
     // create production version of filter
-    let filter = build_test_filter(catalog.clone(), id, permissions.clone(), pipeline.clone());
+    let test_pipeline = build_test_pipeline(catalog.clone(), permissions.clone(), pipeline.clone());
+
     // perform test run to ensure no errors
-    match run_test_pipeline(client.clone(), catalog.clone(), filter.pipeline).await {
+    match run_test_pipeline(client.clone(), catalog.clone(), test_pipeline).await {
         Ok(()) => {}
         Err(e) => {
             return HttpResponse::BadRequest().body(format!(
