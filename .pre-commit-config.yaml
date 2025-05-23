@@ -12,6 +12,10 @@ repos:
     rev: "v3.0.3"
     hooks:
       - id: prettier
+  - repo: https://github.com/nikaro/taplo-pre-commit
+    rev: main
+    hooks:
+      - id: taplo-format
 
 # pre-commit.ci bot configuration
 ci:
