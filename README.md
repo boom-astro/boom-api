@@ -7,32 +7,32 @@ and is largely based on the
 
 ## Development
 
-development environment requirements:
+Development environment requirements:
 
-1. active boom mongodb instance
-2. postman (or some way of making api calls) for querying
+1. Active BOOM MongoDB instance
+2. Postman (or some other way of making HTTP requests) for querying
 
-# Api Documentation
+## API documentation
 
-## Table of contents
+### Table of contents
 
-### Filtering
+#### Filtering
 
 - [Adding a new filter](#post-a-filter)
 - [Adding a filter version](#add-a-new-filter-version)
 
-### Querying
+#### Querying
 
-- [retrieve an object](#get-object)
+- [Retrieve an object](#get-object)
 - [Getting database & collection info](#get-database-info)
-- [Cone Search](#cone-search)
-- [Count Documents](#count-documents)
-- [Sample Alerts](#sample-alerts)
-- [Find Alerts](#find-alerts)
+- [Cone search](#cone-search)
+- [Count documents](#count-documents)
+- [Sample alerts](#sample-alerts)
+- [Find alerts](#find-alerts)
 
-# Filtering
+### Filtering
 
-## Post a Filter
+#### Post a filter
 
 Adds a filter to the database.
 
@@ -112,7 +112,7 @@ Adds a filter to the database.
 }
 ```
 
-## Add a New Filter Version
+#### Add a new filter version
 
 Adds a new pipeline to a filter's pipeline array and sets the filter's active pipeline id to the new pipeline's id.
 
@@ -156,9 +156,9 @@ Adds a new pipeline to a filter's pipeline array and sets the filter's active pi
 }
 ```
 
-# Querying
+### Querying
 
-## Get Object
+#### Get object
 
 Retrieves the most recent detection of an object with its lightcurve, crossmatches with archival catalogs, metadata, and images from the specified survey.
 
@@ -166,7 +166,7 @@ Retrieves the most recent detection of an object with its lightcurve, crossmatch
 **catalog_name**: String. e.g., "ZTF", "NED"\
 **Example Query**: `Get "/alerts/ZTF/get_object/ZTF18aajpnun`
 
-## Get Database Info
+#### Get database Info
 
 Get database or catalog information / specs.
 
@@ -182,7 +182,7 @@ Get database or catalog information / specs.
 }
 ```
 
-## Cone Search
+#### Cone search
 
 Performs a cone search on a catalog and returns the resulting data.
 
@@ -230,7 +230,7 @@ Performs a cone search on a catalog and returns the resulting data.
 }
 ```
 
-## Count Documents
+#### Count documents
 
 Gets the number of documents which pass through a filter.
 
@@ -248,9 +248,9 @@ Gets the number of documents which pass through a filter.
 }
 ```
 
-## Sample Alerts
+#### Sample alerts
 
-Retreives a sample of alerts from the database.
+Retrieves a sample of alerts from the database.
 
 **Endpoint**: `GET "/query/sample"`\
 **catalog_name**: String. e.g., "ZTF_alerts"\
@@ -265,7 +265,7 @@ Retreives a sample of alerts from the database.
 }
 ```
 
-## Find Alerts
+#### Find alerts
 
 Performs a find query on the database.
 
