@@ -22,7 +22,7 @@ development environment requirements:
 ## Post a Filter
 Adds a filter to the database.
 
-**Endpoint**: `POST "/filter"`\
+**Endpoint**: `POST "/filters"`\
 **Body**:
 ```
 {
@@ -99,7 +99,7 @@ Adds a filter to the database.
 ## Add a New Filter Version
 Adds a new pipeline to a filter's pipeline array and sets the filter's active pipeline id to the new pipeline's id.
 
-**Endpoint**: `PATCH "/filter/{filter_id}"`\
+**Endpoint**: `PATCH "/filters/{filter_id}"`\
 **Body**:
 ```
 {

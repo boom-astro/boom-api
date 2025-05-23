@@ -143,7 +143,7 @@ fn build_filter_bson(filter: Filter) -> Result<mongodb::bson::Document, mongodb:
     Ok(database_filter_bson)
 }
 
-#[patch("/filter/{filter_id}")]
+#[patch("/filters/{filter_id}")]
 pub async fn add_filter_version(
     client: web::Data<Client>,
     filter_id: web::Path<i32>,
@@ -224,7 +224,7 @@ pub async fn add_filter_version(
     }
 }
 
-#[post("/filter")]
+#[post("/filters")]
 pub async fn post_filter(
     client: web::Data<Client>,
     body: web::Json<FilterSubmissionBody>,
