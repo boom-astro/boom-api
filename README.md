@@ -166,7 +166,7 @@ Retrieves the most recent detection of an object with its lightcurve, crossmatch
 **catalog_name**: String. e.g., "ZTF", "NED"\
 **Example Query**: `Get "/alerts/ZTF/get_object/ZTF18aajpnun`
 
-#### Get database Info
+#### Get database info
 
 Get database or catalog information / specs.
 
