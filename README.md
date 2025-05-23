@@ -36,54 +36,54 @@ Adds a filter to the database.
 **Example Body**:
 ```
 {
-    "pipeline": 
-    [   
+    "pipeline":
+    [
         {
             "$project": {
-                "cutoutScience": 0, 
-                "cutoutDifference": 0, 
-                "cutoutTemplate": 0, 
-                "publisher": 0, 
+                "cutoutScience": 0,
+                "cutoutDifference": 0,
+                "cutoutTemplate": 0,
+                "publisher": 0,
                 "schemavsn": 0
             }
-        }, 
+        },
         {
             "$lookup": {
-                "from": "alerts_aux", 
-                "localField": "objectId", 
-                "foreignField": "_id", 
+                "from": "alerts_aux",
+                "localField": "objectId",
+                "foreignField": "_id",
                 "as": "aux"
             }
-        }, 
+        },
         {
             "$project": {
-                "objectId": 1, 
-                "candid": 1, 
-                "candidate": 1, 
-                "classifications": 1, 
-                "coordinates": 1, 
+                "objectId": 1,
+                "candid": 1,
+                "candidate": 1,
+                "classifications": 1,
+                "coordinates": 1,
                 "prv_candidates": {
                     "$arrayElemAt": [
-                        "$aux.prv_candidates", 
+                        "$aux.prv_candidates",
                         0
                     ]
-                }, 
+                },
                 "cross_matches": {
                     "$arrayElemAt": [
-                        "$aux.cross_matches", 
+                        "$aux.cross_matches",
                         0
                     ]
                 }
             }
-        }, 
+        },
         {
             "$match": {
                 "candidate.drb": {
                     "$gt": 0.5
-                }, 
+                },
                 "candidate.ndethist": {
                     "$gt": 1.0
-                }, 
+                },
                 "candidate.magpsf": {
                     "$lte": 18.5
                 }
@@ -113,10 +113,10 @@ Adds a new pipeline to a filter's pipeline array and sets the filter's active pi
     "pipeline": [
         {
             "$project": {
-                "cutoutScience": 0, 
-                "cutoutDifference": 0, 
-                "cutoutTemplate": 0, 
-                "publisher": 0, 
+                "cutoutScience": 0,
+                "cutoutDifference": 0,
+                "cutoutTemplate": 0,
+                "publisher": 0,
                 "schemavsn": 0
             }
         },
@@ -124,10 +124,10 @@ Adds a new pipeline to a filter's pipeline array and sets the filter's active pi
             "$match": {
                 "candidate.drb": {
                     "$gt": 0.5
-                }, 
+                },
                 "candidate.ndethist": {
                     "$gt": 1.0
-                }, 
+                },
                 "candidate.magpsf": {
                     "$lte": 18.5
                 }
@@ -152,7 +152,7 @@ Get database or catalog information / specs.
 **Endpoint**: `Get "/query/info"`\
 **command_types**: "db_info", "index_info", "catalog_info", "catalog_names"\
 **catalog_names**: Array Strings. e.g., `["ZTF_alerts",...]` (not required for db_info, catalog_names)\
-**Body**: 
+**Body**:
 ```
 {
     "command": <command_type>,
