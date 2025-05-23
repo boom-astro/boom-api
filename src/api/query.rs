@@ -398,7 +398,6 @@ mod tests {
         let client = Client::with_uri_str("mongodb://localhost:27017")
             .await
             .expect("Failed to connect to MongoDB");
-        // let db = client.database(DB_NAME);
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(client.clone()))
