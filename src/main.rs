@@ -21,8 +21,8 @@ async fn main() -> std::io::Result<()> {
             .service(api::query::count_documents)
             .service(api::query::find)
             .service(api::alerts::get_object)
-            .service(api::filter::post_filter)
-            .service(api::filter::add_filter_version)
+            .service(api::filters::post_filter)
+            .service(api::filters::add_filter_version)
     })
     .bind(("0.0.0.0", 4000))?
     .run()

@@ -1,3 +1,3 @@
 pub mod alerts;
-pub mod filter;
+pub mod filters;
 pub mod query;
