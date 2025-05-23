@@ -1,3 +1,9 @@
+# Boom API
+
+This repo contains the REST API for working with
+[BOOM](https://github.com/boom-astro/boom),
+and is largely based on the
+[Kowalski](https://github.com/skyportal/kowalski) API.
 
 ## Development
 development environment requirements:
