@@ -1,29 +1,44 @@
+# Boom API
+
+This repo contains the REST API for working with
+[BOOM](https://github.com/boom-astro/boom),
+and is largely based on the
+[Kowalski](https://github.com/skyportal/kowalski) API.
 
 ## Development
-development environment requirements:
-1. active boom mongodb instance
-2. postman (or some way of making api calls) for querying
 
-# Api Documentation
+Development environment requirements:
 
-## Table of contents
+1. Active BOOM MongoDB instance
+2. Postman (or some other way of making HTTP requests) for querying
+
+## API documentation
+
+### Table of contents
+
+#### Filtering
+
+- [Adding a new filter](#post-a-filter)
+- [Adding a filter version](#add-a-new-filter-version)
+
+#### Querying
+
+- [Retrieve an object](#get-object)
+- [Getting database & collection info](#get-database-info)
+- [Cone search](#cone-search)
+- [Count documents](#count-documents)
+- [Sample alerts](#sample-alerts)
+- [Find alerts](#find-alerts)
+
 ### Filtering
-* [Adding a new filter](#post-a-filter)
-* [Adding a filter version](#add-a-new-filter-version)
-### Querying
-* [retrieve an object](#get-object)
-* [Getting database & collection info](#get-database-info)
-* [Cone Search](#cone-search)
-* [Count Documents](#count-documents)
-* [Sample Alerts](#sample-alerts)
-* [Find Alerts](#find-alerts)
 
-# Filtering
-## Post a Filter
+#### Post a filter
+
 Adds a filter to the database.
 
-**Endpoint**: `POST "/filter"`\
+**Endpoint**: `POST "/filters"`\
 **Body**:
+
 ```
 {
     "pipeline": aggregate pipeline (array of bson documents),
@@ -34,56 +49,57 @@ Adds a filter to the database.
 ```
 
 **Example Body**:
+
 ```
 {
-    "pipeline": 
-    [   
+    "pipeline":
+    [
         {
             "$project": {
-                "cutoutScience": 0, 
-                "cutoutDifference": 0, 
-                "cutoutTemplate": 0, 
-                "publisher": 0, 
+                "cutoutScience": 0,
+                "cutoutDifference": 0,
+                "cutoutTemplate": 0,
+                "publisher": 0,
                 "schemavsn": 0
             }
-        }, 
+        },
         {
             "$lookup": {
-                "from": "alerts_aux", 
-                "localField": "objectId", 
-                "foreignField": "_id", 
+                "from": "alerts_aux",
+                "localField": "objectId",
+                "foreignField": "_id",
                 "as": "aux"
             }
-        }, 
+        },
         {
             "$project": {
-                "objectId": 1, 
-                "candid": 1, 
-                "candidate": 1, 
-                "classifications": 1, 
-                "coordinates": 1, 
+                "objectId": 1,
+                "candid": 1,
+                "candidate": 1,
+                "classifications": 1,
+                "coordinates": 1,
                 "prv_candidates": {
                     "$arrayElemAt": [
-                        "$aux.prv_candidates", 
+                        "$aux.prv_candidates",
                         0
                     ]
-                }, 
+                },
                 "cross_matches": {
                     "$arrayElemAt": [
-                        "$aux.cross_matches", 
+                        "$aux.cross_matches",
                         0
                     ]
                 }
             }
-        }, 
+        },
         {
             "$match": {
                 "candidate.drb": {
                     "$gt": 0.5
-                }, 
+                },
                 "candidate.ndethist": {
                     "$gt": 1.0
-                }, 
+                },
                 "candidate.magpsf": {
                     "$lte": 18.5
                 }
@@ -96,11 +112,13 @@ Adds a filter to the database.
 }
 ```
 
-## Add a New Filter Version
+#### Add a new filter version
+
 Adds a new pipeline to a filter's pipeline array and sets the filter's active pipeline id to the new pipeline's id.
 
-**Endpoint**: `PATCH "/filter/{filter_id}"`\
+**Endpoint**: `PATCH "/filters/{filter_id}"`\
 **Body**:
+
 ```
 {
     "pipeline": aggregate pipeline (array of bson documents)
@@ -108,15 +126,16 @@ Adds a new pipeline to a filter's pipeline array and sets the filter's active pi
 ```
 
 **Example Body**:
+
 ```
 {
     "pipeline": [
         {
             "$project": {
-                "cutoutScience": 0, 
-                "cutoutDifference": 0, 
-                "cutoutTemplate": 0, 
-                "publisher": 0, 
+                "cutoutScience": 0,
+                "cutoutDifference": 0,
+                "cutoutTemplate": 0,
+                "publisher": 0,
                 "schemavsn": 0
             }
         },
@@ -124,10 +143,10 @@ Adds a new pipeline to a filter's pipeline array and sets the filter's active pi
             "$match": {
                 "candidate.drb": {
                     "$gt": 0.5
-                }, 
+                },
                 "candidate.ndethist": {
                     "$gt": 1.0
-                }, 
+                },
                 "candidate.magpsf": {
                     "$lte": 18.5
                 }
@@ -137,22 +156,25 @@ Adds a new pipeline to a filter's pipeline array and sets the filter's active pi
 }
 ```
 
-# Querying
+### Querying
 
-## Get Object
+#### Get object
+
 Retrieves the most recent detection of an object with its lightcurve, crossmatches with archival catalogs, metadata, and images from the specified survey.
 
 **Endpoint**: `Get "/alerts/{survey_name}/get_object/{object_id}"`\
 **catalog_name**: String. e.g., "ZTF", "NED"\
 **Example Query**: `Get "/alerts/ZTF/get_object/ZTF18aajpnun`
 
-## Get Database Info
+#### Get database info
+
 Get database or catalog information / specs.
 
 **Endpoint**: `Get "/query/info"`\
 **command_types**: "db_info", "index_info", "catalog_info", "catalog_names"\
 **catalog_names**: Array Strings. e.g., `["ZTF_alerts",...]` (not required for db_info, catalog_names)\
-**Body**: 
+**Body**:
+
 ```
 {
     "command": <command_type>,
@@ -160,12 +182,14 @@ Get database or catalog information / specs.
 }
 ```
 
-## Cone Search
+#### Cone search
+
 Performs a cone search on a catalog and returns the resulting data.
 
 **Endpoint**: `Get "/query/cone_search"`\
 **Unit**: "Arcseconds", "Arcminutes", "Degrees", "Radians"\
 **Body**:
+
 ```
 {
     "radius": <float>,
@@ -188,6 +212,7 @@ Performs a cone search on a catalog and returns the resulting data.
 ```
 
 **Example Body** (should return at least an object called `NGC 5162`):
+
 ```
 {
     "radius": 1,
@@ -205,12 +230,14 @@ Performs a cone search on a catalog and returns the resulting data.
 }
 ```
 
-## Count Documents
+#### Count documents
+
 Gets the number of documents which pass through a filter.
 
 **Endpoint**: `GET "/query/count_documents"`\
 **catalog_name**: String. e.g., "ZTF_alerts"\
 **Body:**
+
 ```
 {
     "query": {
@@ -221,12 +248,14 @@ Gets the number of documents which pass through a filter.
 }
 ```
 
-## Sample Alerts
-Retreives a sample of alerts from the database.
+#### Sample alerts
+
+Retrieves a sample of alerts from the database.
 
 **Endpoint**: `GET "/query/sample"`\
 **catalog_name**: String. e.g., "ZTF_alerts"\
 **Body:**
+
 ```
 {
     "query": {
@@ -236,12 +265,14 @@ Retreives a sample of alerts from the database.
 }
 ```
 
-## Find Alerts
+#### Find alerts
+
 Performs a find query on the database.
 
 **Endpoint**: `GET "/query/find"`\
 **catalog_name**: String. e.g., "ZTF_alerts"\
 **Body:**
+
 ```
 {
     "query": {
@@ -251,7 +282,9 @@ Performs a find query on the database.
     "kwargs": {<kwargs>}
 }
 ```
+
 **Example Body**:
+
 ```
 {
     "query": {
