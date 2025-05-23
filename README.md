@@ -6,30 +6,39 @@ and is largely based on the
 [Kowalski](https://github.com/skyportal/kowalski) API.
 
 ## Development
+
 development environment requirements:
+
 1. active boom mongodb instance
 2. postman (or some way of making api calls) for querying
 
 # Api Documentation
 
 ## Table of contents
+
 ### Filtering
-* [Adding a new filter](#post-a-filter)
-* [Adding a filter version](#add-a-new-filter-version)
+
+- [Adding a new filter](#post-a-filter)
+- [Adding a filter version](#add-a-new-filter-version)
+
 ### Querying
-* [retrieve an object](#get-object)
-* [Getting database & collection info](#get-database-info)
-* [Cone Search](#cone-search)
-* [Count Documents](#count-documents)
-* [Sample Alerts](#sample-alerts)
-* [Find Alerts](#find-alerts)
+
+- [retrieve an object](#get-object)
+- [Getting database & collection info](#get-database-info)
+- [Cone Search](#cone-search)
+- [Count Documents](#count-documents)
+- [Sample Alerts](#sample-alerts)
+- [Find Alerts](#find-alerts)
 
 # Filtering
+
 ## Post a Filter
+
 Adds a filter to the database.
 
 **Endpoint**: `POST "/filters"`\
 **Body**:
+
 ```
 {
     "pipeline": aggregate pipeline (array of bson documents),
@@ -40,6 +49,7 @@ Adds a filter to the database.
 ```
 
 **Example Body**:
+
 ```
 {
     "pipeline":
@@ -103,10 +113,12 @@ Adds a filter to the database.
 ```
 
 ## Add a New Filter Version
+
 Adds a new pipeline to a filter's pipeline array and sets the filter's active pipeline id to the new pipeline's id.
 
 **Endpoint**: `PATCH "/filters/{filter_id}"`\
 **Body**:
+
 ```
 {
     "pipeline": aggregate pipeline (array of bson documents)
@@ -114,6 +126,7 @@ Adds a new pipeline to a filter's pipeline array and sets the filter's active pi
 ```
 
 **Example Body**:
+
 ```
 {
     "pipeline": [
@@ -146,6 +159,7 @@ Adds a new pipeline to a filter's pipeline array and sets the filter's active pi
 # Querying
 
 ## Get Object
+
 Retrieves the most recent detection of an object with its lightcurve, crossmatches with archival catalogs, metadata, and images from the specified survey.
 
 **Endpoint**: `Get "/alerts/{survey_name}/get_object/{object_id}"`\
@@ -153,12 +167,14 @@ Retrieves the most recent detection of an object with its lightcurve, crossmatch
 **Example Query**: `Get "/alerts/ZTF/get_object/ZTF18aajpnun`
 
 ## Get Database Info
+
 Get database or catalog information / specs.
 
 **Endpoint**: `Get "/query/info"`\
 **command_types**: "db_info", "index_info", "catalog_info", "catalog_names"\
 **catalog_names**: Array Strings. e.g., `["ZTF_alerts",...]` (not required for db_info, catalog_names)\
 **Body**:
+
 ```
 {
     "command": <command_type>,
@@ -167,11 +183,13 @@ Get database or catalog information / specs.
 ```
 
 ## Cone Search
+
 Performs a cone search on a catalog and returns the resulting data.
 
 **Endpoint**: `Get "/query/cone_search"`\
 **Unit**: "Arcseconds", "Arcminutes", "Degrees", "Radians"\
 **Body**:
+
 ```
 {
     "radius": <float>,
@@ -194,6 +212,7 @@ Performs a cone search on a catalog and returns the resulting data.
 ```
 
 **Example Body** (should return at least an object called `NGC 5162`):
+
 ```
 {
     "radius": 1,
@@ -212,11 +231,13 @@ Performs a cone search on a catalog and returns the resulting data.
 ```
 
 ## Count Documents
+
 Gets the number of documents which pass through a filter.
 
 **Endpoint**: `GET "/query/count_documents"`\
 **catalog_name**: String. e.g., "ZTF_alerts"\
 **Body:**
+
 ```
 {
     "query": {
@@ -228,11 +249,13 @@ Gets the number of documents which pass through a filter.
 ```
 
 ## Sample Alerts
+
 Retreives a sample of alerts from the database.
 
 **Endpoint**: `GET "/query/sample"`\
 **catalog_name**: String. e.g., "ZTF_alerts"\
 **Body:**
+
 ```
 {
     "query": {
@@ -243,11 +266,13 @@ Retreives a sample of alerts from the database.
 ```
 
 ## Find Alerts
+
 Performs a find query on the database.
 
 **Endpoint**: `GET "/query/find"`\
 **catalog_name**: String. e.g., "ZTF_alerts"\
 **Body:**
+
 ```
 {
     "query": {
@@ -257,7 +282,9 @@ Performs a find query on the database.
     "kwargs": {<kwargs>}
 }
 ```
+
 **Example Body**:
+
 ```
 {
     "query": {

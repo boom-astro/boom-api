@@ -8,6 +8,10 @@ repos:
         language: rust
         files: \.rs$
         args: []
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: "v3.0.3"
+    hooks:
+      - id: prettier
 
 # pre-commit.ci bot configuration
 ci:
