@@ -387,3 +387,34 @@ pub async fn cone_search(
         serde_json::json!(docs),
     );
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use actix_web::{dev::ServiceResponse, http::StatusCode, test, App};
+
+    #[actix_web::test]
+    async fn test_get_info() {
+        let client = Client::with_uri_str("mongodb://localhost:27017")
+            .await
+            .expect("Failed to connect to MongoDB");
+        // let db = client.database(DB_NAME);
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(client.clone()))
+                .service(get_info),
+        )
+        .await;
+
+        let req = test::TestRequest::get()
+            .uri("/query/info")
+            .set_json(InfoQueryBody {
+                command: Some("db_info".to_string()),
+                catalogs: None,
+            })
+            .to_request();
+
+        let resp: ServiceResponse = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+}
