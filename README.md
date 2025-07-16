@@ -1,5 +1,9 @@
 # Boom API
 
+**⚠️⚠️⚠️ This repo has been merged with https://github.com/boom-astro/boom, and has now been archived ⚠️⚠️⚠️**
+
+---
+
 This repo contains the REST API for working with
 [BOOM](https://github.com/boom-astro/boom),
 and is largely based on the
