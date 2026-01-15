@@ -1,7 +1,7 @@
 use mongodb::bson::doc;
 use std::{collections::HashMap, fmt};
 
-#[derive(serde::Deserialize, Clone)]
+#[derive(serde::Deserialize, serde::Serialize, Clone)]
 pub struct InfoQueryBody {
     pub command: Option<String>,
     pub catalogs: Option<Vec<String>>,
